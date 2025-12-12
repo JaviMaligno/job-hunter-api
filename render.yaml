@@ -1,0 +1,39 @@
+# Render Blueprint
+# Deploy with: render blueprint apply
+
+services:
+  - type: web
+    name: job-hunter-api
+    runtime: python
+    region: frankfurt  # EU for GDPR compliance
+    plan: starter
+    buildCommand: pip install poetry && poetry config virtualenvs.create false && poetry install --no-dev
+    startCommand: poetry run uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: job-hunter-db
+          property: connectionString
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_BASE_URL
+        value: https://cloud.langfuse.com
+      - key: ENCRYPTION_KEY
+        generateValue: true
+    autoDeploy: true
+
+databases:
+  - name: job-hunter-db
+    region: frankfurt
+    plan: starter
+    databaseName: job_hunter
+    user: job_hunter_user
