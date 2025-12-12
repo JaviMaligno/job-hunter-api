@@ -44,27 +44,33 @@ poetry run uvicorn src.main:app --reload
 
 ```bash
 # Gmail Integration
-poetry run python -m src.cli.commands gmail-login     # Authenticate with Gmail
-poetry run python -m src.cli.commands gmail-status    # Check connection status
-poetry run python -m src.cli.commands gmail-fetch     # Fetch job alert emails
-poetry run python -m src.cli.commands gmail-logout    # Disconnect Gmail
+poetry run job-hunter gmail-login     # Authenticate with Gmail
+poetry run job-hunter gmail-status    # Check connection status
+poetry run job-hunter gmail-fetch     # Fetch job alert emails
+poetry run job-hunter gmail-logout    # Disconnect Gmail
 
 # Adapt CV for a specific job
-poetry run python -m src.cli.commands adapt-cv \
+poetry run job-hunter adapt-cv \
   --cv ./my_cv.pdf \
   --job "Job description text or file path" \
   --title "Software Engineer" \
   --company "Acme Corp"
 
 # Generate cover letter
-poetry run python -m src.cli.commands cover-letter \
+poetry run job-hunter cover-letter \
   --cv ./my_cv.pdf \
   --job "Job description..." \
   --title "Software Engineer" \
   --company "Acme Corp"
 
+# Browser Automation (Phase 2)
+poetry run job-hunter browser-start                    # Start browser service
+poetry run job-hunter apply <url> --cv ./cv.pdf       # Apply to job (assisted mode)
+poetry run job-hunter apply-status <session_id>       # Check application status
+poetry run job-hunter apply-resume <session_id>       # Resume paused application
+
 # Show configuration
-poetry run python -m src.cli.commands info
+poetry run job-hunter info
 ```
 
 ### API Usage
@@ -82,13 +88,19 @@ curl -X POST http://localhost:8000/api/jobs/adapt \
 ```
 job-hunter-api/
 ├── src/
-│   ├── agents/           # AI Agents (CV adapter, form filler, etc.)
-│   ├── api/              # FastAPI routes
-│   ├── automation/       # ATS-specific instructions
+│   ├── agents/           # AI Agents (CV adapter, form filler, question answerer)
+│   ├── api/              # FastAPI routes (jobs, users, applications)
+│   ├── automation/       # Browser automation
+│   │   ├── strategies/   # ATS-specific strategies (Breezy, Generic)
+│   │   ├── blockers/     # CAPTCHA & blocker detection
+│   │   ├── client.py     # Browser service HTTP client
+│   │   └── pause_manager.py  # Session state management
+│   ├── browser_service/  # Standalone browser service (port 8001)
+│   │   └── adapters/     # Chrome DevTools MCP, Playwright
 │   ├── cli/              # Typer CLI commands
 │   ├── db/               # SQLAlchemy models
-│   ├── integrations/     # Claude SDK, Email, Langfuse
-│   └── mcp/              # MCP browser client
+│   ├── integrations/     # Claude SDK, Gmail, Langfuse
+│   └── mcp/              # MCP client wrapper
 ├── docs/                 # Implementation tracking
 └── tests/
 ```

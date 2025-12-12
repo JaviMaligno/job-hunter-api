@@ -19,6 +19,15 @@ from src.agents.email_parser import (
     EmailParserOutput,
     ExtractedJob,
 )
+from src.agents.form_filler import (
+    CustomQuestion,
+    FieldMapping,
+    FormAnalysis,
+    FormFillerAgent,
+    FormFillerInput,
+    FormFillerOutput,
+    UserFormData,
+)
 
 __all__ = [
     # Base
@@ -39,4 +48,12 @@ __all__ = [
     "EmailBatchParserAgent",
     "EmailBatchParserInput",
     "EmailBatchParserOutput",
+    # Form Filler
+    "FormFillerAgent",
+    "FormFillerInput",
+    "FormFillerOutput",
+    "FormAnalysis",
+    "UserFormData",
+    "FieldMapping",
+    "CustomQuestion",
 ]

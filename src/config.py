@@ -63,6 +63,19 @@ class Settings(BaseSettings):
     max_applications_per_day: int = Field(default=10, ge=1, le=100)
     max_auto_applications_per_day: int = Field(default=5, ge=1, le=50)
 
+    # Browser Service (Phase 2)
+    browser_service_url: str = "http://localhost:8001"
+    browser_service_timeout: int = Field(default=30000, ge=5000, le=120000)  # ms
+    default_browser_mode: str = "playwright"  # "chrome-devtools" or "playwright"
+
+    # Playwright Settings
+    playwright_headless: bool = True
+    playwright_slow_mo: int = Field(default=0, ge=0, le=1000)  # ms between actions
+
+    # Application Automation
+    pre_submit_pause: bool = True  # Always pause before submit in assisted mode
+    screenshot_dir: str = "./data/screenshots"
+
     @property
     def is_production(self) -> bool:
         """Check if running in production."""

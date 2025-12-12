@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from anthropic import Anthropic
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from src.config import settings
 from src.integrations.claude.client import get_claude_client
@@ -28,4 +28,4 @@ async def get_claude_dependency(
 
 
 # Type alias for dependency injection
-ClaudeDep = Annotated[Anthropic, get_claude_dependency]
+ClaudeDep = Annotated[Anthropic, Depends(get_claude_dependency)]

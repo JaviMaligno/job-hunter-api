@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
@@ -75,10 +75,10 @@ def adapt_cv(
     company: Annotated[str, typer.Option("--company", help="Company name")],
     language: Annotated[str, typer.Option("--lang", "-l", help="Output language")] = "en",
     output: Annotated[
-        Path | None, typer.Option("--output", "-o", help="Output file path")
+        Optional[Path], typer.Option("--output", "-o", help="Output file path")
     ] = None,
     api_key: Annotated[
-        str | None, typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
+        Optional[str], typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
     ] = None,
 ):
     """
@@ -168,10 +168,10 @@ def cover_letter(
         str, typer.Option("--tone", help="Tone: professional, enthusiastic, casual")
     ] = "professional",
     output: Annotated[
-        Path | None, typer.Option("--output", "-o", help="Output file path")
+        Optional[Path], typer.Option("--output", "-o", help="Output file path")
     ] = None,
     api_key: Annotated[
-        str | None, typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
+        Optional[str], typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
     ] = None,
 ):
     """
@@ -369,6 +369,284 @@ def info():
 
     console.print(f"  Gmail: {'[green]Connected[/green]' if is_authenticated() else '[yellow]Not connected (run gmail-login)[/yellow]'}")
     console.print(f"  Google OAuth: {'[green]Configured[/green]' if settings.google_client_id else '[yellow]Not configured[/yellow]'}")
+
+
+# ============================================================================
+# Phase 2: Browser Automation Commands
+# ============================================================================
+
+
+@app.command()
+def apply(
+    job_url: Annotated[str, typer.Argument(help="URL of the job to apply to")],
+    cv_path: Annotated[Path, typer.Option("--cv", "-c", help="Path to CV file")],
+    mode: Annotated[str, typer.Option("--mode", "-m", help="Mode: assisted, semi-auto, auto")] = "assisted",
+    cover_letter_path: Annotated[
+        Optional[Path], typer.Option("--cover", help="Path to cover letter file")
+    ] = None,
+    headless: Annotated[bool, typer.Option("--headless", help="Run browser headless")] = False,
+    api_key: Annotated[
+        Optional[str], typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
+    ] = None,
+):
+    """
+    Apply to a job posting with browser automation.
+
+    Modes:
+    - assisted: Auto-fill form, pause before submit for review (default)
+    - semi-auto: Auto-fill form, pause only on blockers
+    - auto: Fully automatic (use with caution)
+
+    Example:
+        job-hunter apply "https://company.breezy.hr/p/job123" --cv ./cv.pdf --mode assisted
+    """
+    from src.agents.form_filler import FormFillerAgent, FormFillerInput, UserFormData
+    from src.automation.client import BrowserServiceClient
+    from src.db.models import ApplicationMode
+
+    if not cv_path.exists():
+        console.print(f"[red]Error:[/red] CV file not found: {cv_path}")
+        raise typer.Exit(1)
+
+    # Read CV
+    console.print("[dim]Reading CV...[/dim]")
+    cv_content = read_cv(cv_path)
+
+    # Read cover letter if provided
+    cover_letter = None
+    if cover_letter_path and cover_letter_path.exists():
+        cover_letter = read_file(cover_letter_path)
+
+    # Map mode string to enum
+    mode_map = {
+        "assisted": ApplicationMode.ASSISTED,
+        "semi-auto": ApplicationMode.SEMI_AUTO,
+        "auto": ApplicationMode.AUTO,
+    }
+    app_mode = mode_map.get(mode.lower(), ApplicationMode.ASSISTED)
+
+    console.print(
+        Panel(
+            f"[bold]Applying to job[/bold]\n\n"
+            f"URL: {job_url}\n"
+            f"CV: {cv_path}\n"
+            f"Mode: {app_mode.value}\n"
+            f"Headless: {headless}",
+            title="Job Hunter - Apply",
+        )
+    )
+
+    # Check if browser service is available
+    async def check_service():
+        return await BrowserServiceClient.is_service_available()
+
+    service_available = asyncio.run(check_service())
+
+    if not service_available:
+        console.print("\n[yellow]Browser Service not running[/yellow]")
+        console.print("Start it with: [bold]uvicorn src.browser_service.main:app --port 8001[/bold]")
+        console.print("\nOr run in headless mode without the service (coming soon)")
+        raise typer.Exit(1)
+
+    # Create user data (TODO: load from database/config)
+    # For now, using placeholder data
+    user_data = UserFormData(
+        first_name="John",
+        last_name="Doe",
+        email="john.doe@example.com",
+        phone="7123456789",
+        phone_country_code="+44",
+        city="London",
+        country="United Kingdom",
+    )
+
+    console.print("[yellow]Note: Using placeholder user data. Configure your profile for real applications.[/yellow]")
+
+    async def run_apply():
+        agent = FormFillerAgent(claude_api_key=api_key)
+        input_data = FormFillerInput(
+            application_url=job_url,
+            user_data=user_data,
+            cv_content=cv_content,
+            cv_file_path=str(cv_path) if cv_path else None,
+            cover_letter=cover_letter,
+            mode=app_mode,
+            headless=headless,
+        )
+        return await agent.run(input_data)
+
+    console.print("\n[dim]Starting browser automation...[/dim]")
+
+    try:
+        result = asyncio.run(run_apply())
+
+        # Display results
+        status_color = {
+            "pending": "yellow",
+            "in_progress": "blue",
+            "submitted": "green",
+            "failed": "red",
+            "needs_intervention": "yellow",
+        }
+        color = status_color.get(result.status.value, "white")
+
+        console.print(f"\n[bold]Status:[/bold] [{color}]{result.status.value}[/{color}]")
+
+        if result.detected_ats:
+            console.print(f"[dim]ATS Detected:[/dim] {result.detected_ats}")
+
+        if result.fields_filled:
+            console.print(f"\n[bold]Fields Filled:[/bold] {len(result.fields_filled)}")
+            for selector, value in list(result.fields_filled.items())[:5]:
+                display_value = value[:30] + "..." if len(value) > 30 else value
+                console.print(f"  [green]+[/green] {display_value}")
+
+        if result.questions_answered:
+            console.print(f"\n[bold]Questions Answered:[/bold] {len(result.questions_answered)}")
+            for q in result.questions_answered[:3]:
+                console.print(f"  [blue]Q:[/blue] {q.question_text[:50]}...")
+                if q.answer:
+                    console.print(f"  [green]A:[/green] {q.answer[:50]}...")
+
+        if result.blocker_detected:
+            console.print(f"\n[yellow]Blocker:[/yellow] {result.blocker_detected.value}")
+            if result.blocker_details:
+                console.print(f"  {result.blocker_details}")
+
+        if result.requires_user_action:
+            console.print(f"\n[bold yellow]Action Required:[/bold yellow]")
+            console.print(f"  {result.user_action_message}")
+            console.print(f"\n  Session ID: {result.browser_session_id}")
+            console.print(f"  Use 'apply-resume {result.browser_session_id}' after completing the action")
+
+        if result.screenshot_path:
+            console.print(f"\n[dim]Screenshot:[/dim] {result.screenshot_path}")
+
+        if result.error_message:
+            console.print(f"\n[red]Error:[/red] {result.error_message}")
+
+    except Exception as e:
+        console.print(f"\n[red]Error during application:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def apply_status(
+    session_id: Annotated[Optional[str], typer.Argument(help="Session ID to check")] = None,
+):
+    """
+    Check status of application sessions.
+
+    Without arguments, shows all paused sessions.
+    With session_id, shows details for that session.
+
+    Example:
+        job-hunter apply-status
+        job-hunter apply-status abc123-def456
+    """
+    from src.automation.blockers.handler import BlockerHandler
+
+    handler = BlockerHandler()
+    paused = handler.list_paused_sessions()
+
+    if session_id:
+        # Show specific session
+        session = handler.get_paused_session(session_id)
+        if session:
+            console.print(Panel(
+                f"[bold]Session:[/bold] {session.session_id}\n"
+                f"[bold]Blocker:[/bold] {session.blocker_type.value}\n"
+                f"[bold]Message:[/bold] {session.blocker_message}\n"
+                f"[bold]Paused At:[/bold] {session.paused_at}\n"
+                f"[bold]URL:[/bold] {session.page_url or 'N/A'}",
+                title="Session Details",
+            ))
+            if session.screenshot_path:
+                console.print(f"\n[dim]Screenshot:[/dim] {session.screenshot_path}")
+        else:
+            console.print(f"[yellow]Session not found:[/yellow] {session_id}")
+    else:
+        # Show all paused sessions
+        if not paused:
+            console.print("[green]No paused sessions[/green]")
+            return
+
+        console.print(f"[bold]Paused Sessions:[/bold] {len(paused)}\n")
+        for session in paused:
+            console.print(f"  [yellow]*[/yellow] {session.session_id[:8]}...")
+            console.print(f"    Blocker: {session.blocker_type.value}")
+            console.print(f"    Message: {session.blocker_message}")
+            console.print(f"    Paused: {session.paused_at.strftime('%Y-%m-%d %H:%M')}")
+            console.print()
+
+
+@app.command()
+def apply_resume(
+    session_id: Annotated[str, typer.Argument(help="Session ID to resume")],
+):
+    """
+    Resume a paused application session.
+
+    Use this after manually completing a CAPTCHA or logging in.
+
+    Example:
+        job-hunter apply-resume abc123-def456
+    """
+    from src.automation.blockers.handler import BlockerHandler
+
+    handler = BlockerHandler()
+    session = handler.get_paused_session(session_id)
+
+    if not session:
+        console.print(f"[yellow]Session not found or already completed:[/yellow] {session_id}")
+        raise typer.Exit(1)
+
+    console.print(Panel(
+        f"[bold]Resuming session:[/bold] {session_id}\n"
+        f"[dim]Previous blocker:[/dim] {session.blocker_type.value}\n"
+        f"[dim]URL:[/dim] {session.page_url or 'N/A'}",
+        title="Job Hunter - Resume",
+    ))
+
+    # Mark as resumed
+    handler.resume_session(session_id)
+
+    console.print("\n[green]Session marked as resumed[/green]")
+    console.print("[dim]Note: In a full implementation, this would reconnect to the browser session[/dim]")
+    console.print("[dim]and continue the form filling process.[/dim]")
+
+
+@app.command()
+def browser_start(
+    mode: Annotated[str, typer.Option("--mode", help="Browser mode: playwright")] = "playwright",
+    port: Annotated[int, typer.Option("--port", "-p", help="Port for browser service")] = 8001,
+):
+    """
+    Start the browser service.
+
+    This service handles browser automation for job applications.
+    Must be running before using 'apply' command.
+
+    Example:
+        job-hunter browser-start
+        job-hunter browser-start --port 8002
+    """
+    import uvicorn
+
+    console.print(Panel(
+        f"[bold]Starting Browser Service[/bold]\n\n"
+        f"Mode: {mode}\n"
+        f"Port: {port}\n\n"
+        f"Press Ctrl+C to stop",
+        title="Job Hunter - Browser Service",
+    ))
+
+    uvicorn.run(
+        "src.browser_service.main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+    )
 
 
 if __name__ == "__main__":

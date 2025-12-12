@@ -18,7 +18,7 @@ pydantic-settings = "^2.6.0"
 langfuse = "^2.54.0"
 langgraph = "^0.2.0"
 mcp = "^1.0.0"
-typer = {extras = ["all"], version = "^0.14.0"}
+typer = "0.12.5"
 google-api-python-client = "^2.150.0"
 google-auth-oauthlib = "^1.2.0"
 O365 = "^2.0.35"
@@ -33,9 +33,15 @@ google-auth-httplib2 = "^0.2.1"
 boto3 = "^1.42.8"
 beautifulsoup4 = "^4.14.3"
 
+# Browser Automation (Phase 2)
+playwright = "^1.49.0"
+websockets = "^14.0"
+click = "8.1.7"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
 pytest-asyncio = "^0.24.0"
+pytest-playwright = "^0.6.2"
 ruff = "^0.8.0"
 mypy = "^1.13.0"
 pre-commit = "^4.0.0"
