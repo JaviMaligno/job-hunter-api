@@ -71,8 +71,10 @@ dmypy.json
 # Screenshots from automation
 screenshots/
 
-# Generated CVs and cover letters (keep in cvs_adaptados)
+# Generated CVs and cover letters
 generated/
+cvs_adaptados/
+aplicaciones/
 
 # OS
 .DS_Store
