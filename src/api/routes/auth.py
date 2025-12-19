@@ -206,10 +206,20 @@ async def google_login(request: GoogleLoginRequest, db: DbDep) -> GoogleLoginRes
     result = await db.execute(select(User).where(User.email == request.email))
     user = result.scalar_one_or_none()
 
+    # Parse name into first_name and last_name
+    first_name = ""
+    last_name = ""
+    if request.name:
+        name_parts = request.name.split(" ", 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
     if user:
         # Update existing user
-        if request.name and not user.full_name:
-            user.full_name = request.name
+        if first_name and not user.first_name:
+            user.first_name = first_name
+        if last_name and not user.last_name:
+            user.last_name = last_name
         if request.image and not user.avatar_url:
             user.avatar_url = request.image
         user.auth_provider = AuthProvider.GOOGLE
@@ -218,7 +228,8 @@ async def google_login(request: GoogleLoginRequest, db: DbDep) -> GoogleLoginRes
         # Create new user
         user = User(
             email=request.email,
-            full_name=request.name,
+            first_name=first_name or "User",
+            last_name=last_name or "",
             avatar_url=request.image,
             auth_provider=AuthProvider.GOOGLE,
             email_verified=True,
