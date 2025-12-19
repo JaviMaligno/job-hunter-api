@@ -1,120 +1,130 @@
-"""Gmail integration using OAuth2 for Desktop Apps."""
+"""Gmail integration using OAuth2 with per-user token storage."""
 
 import base64
-import json
-import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
 from typing import Any
+from uuid import UUID
 
-from google.auth.transport.requests import Request
+import httpx
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings, DEFAULT_JOB_EMAIL_SENDERS
+from src.db.models import EmailConnection, EmailProvider
 
-# Gmail API scopes
+# Gmail API scopes - only readonly is required
+# Labels scope is optional - app works without it
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.labels",
 ]
 
-# Token storage path
-TOKEN_PATH = Path("data/gmail_token.json")
-CREDENTIALS_PATH = Path("data/gmail_credentials.json")
 
-
-def get_credentials_config() -> dict[str, Any]:
-    """Build credentials config from environment variables."""
-    return {
-        "installed": {
-            "client_id": settings.google_client_id,
-            "client_secret": settings.google_client_secret,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "redirect_uris": ["http://localhost"],
-        }
-    }
-
-
-def authenticate_gmail() -> Credentials:
+async def get_user_gmail_credentials(
+    db: AsyncSession, user_id: UUID
+) -> Credentials | None:
     """
-    Authenticate with Gmail using OAuth2 Desktop App flow.
+    Get Gmail credentials for a specific user from the database.
 
-    Returns:
-        Credentials object for Gmail API.
-
-    This will:
-    1. Check for existing valid token
-    2. Refresh token if expired
-    3. Run OAuth flow if no token exists (opens browser)
+    Returns None if user has no Gmail connection or tokens are invalid.
     """
-    creds = None
+    result = await db.execute(
+        select(EmailConnection).where(
+            EmailConnection.user_id == user_id,
+            EmailConnection.provider == EmailProvider.GMAIL,
+            EmailConnection.is_active == True,  # noqa: E712
+        )
+    )
+    connection = result.scalar_one_or_none()
 
-    # Check for existing token
-    if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+    if not connection or not connection.access_token_encrypted:
+        return None
 
-    # Refresh or get new credentials
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            # Run OAuth flow - opens browser
-            if not settings.google_client_id or not settings.google_client_secret:
-                raise ValueError(
-                    "Google OAuth credentials not configured. "
-                    "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env"
-                )
+    # Check if token is expired and refresh if needed
+    if connection.token_expires_at and connection.token_expires_at < datetime.utcnow():
+        if connection.refresh_token_encrypted:
+            try:
+                new_tokens = await _refresh_token(connection.refresh_token_encrypted)
+                connection.access_token_encrypted = new_tokens["access_token"]
+                expires_in = new_tokens.get("expires_in", 3600)
+                connection.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+                await db.flush()
+            except Exception:
+                # Token refresh failed - connection may be revoked
+                connection.is_active = False
+                await db.flush()
+                return None
 
-            flow = InstalledAppFlow.from_client_config(
-                get_credentials_config(),
-                SCOPES,
-            )
-            creds = flow.run_local_server(port=0)
-
-        # Save credentials for next run
-        TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(TOKEN_PATH, "w") as token_file:
-            token_file.write(creds.to_json())
-
-    return creds
-
-
-def get_gmail_service():
-    """Get authenticated Gmail API service."""
-    creds = authenticate_gmail()
-    return build("gmail", "v1", credentials=creds)
-
-
-def is_authenticated() -> bool:
-    """Check if Gmail is authenticated with valid token."""
-    if not TOKEN_PATH.exists():
-        return False
-
-    try:
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
-        return creds.valid or (creds.expired and creds.refresh_token)
-    except Exception:
-        return False
+    # Build credentials object
+    return Credentials(
+        token=connection.access_token_encrypted,
+        refresh_token=connection.refresh_token_encrypted,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        scopes=SCOPES,
+    )
 
 
-def logout_gmail() -> bool:
-    """Remove Gmail authentication token."""
-    if TOKEN_PATH.exists():
-        TOKEN_PATH.unlink()
-        return True
-    return False
+async def _refresh_token(refresh_token: str) -> dict:
+    """Refresh Gmail access token using refresh token."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+async def is_gmail_connected(db: AsyncSession, user_id: UUID) -> bool:
+    """Check if user has an active Gmail connection."""
+    result = await db.execute(
+        select(EmailConnection).where(
+            EmailConnection.user_id == user_id,
+            EmailConnection.provider == EmailProvider.GMAIL,
+            EmailConnection.is_active == True,  # noqa: E712
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 
 class GmailClient:
-    """Gmail client for fetching and parsing emails."""
+    """Gmail client for fetching and parsing emails per user."""
 
-    def __init__(self):
-        self.service = get_gmail_service()
+    def __init__(self, credentials: Credentials):
+        """
+        Initialize Gmail client with user credentials.
+
+        Args:
+            credentials: OAuth2 credentials for the user's Gmail account.
+        """
+        self.credentials = credentials
+        self.service = build("gmail", "v1", credentials=credentials)
+
+    @classmethod
+    async def for_user(cls, db: AsyncSession, user_id: UUID) -> "GmailClient | None":
+        """
+        Create a GmailClient for a specific user.
+
+        Args:
+            db: Database session
+            user_id: User's UUID
+
+        Returns:
+            GmailClient instance or None if user has no Gmail connection.
+        """
+        credentials = await get_user_gmail_credentials(db, user_id)
+        if not credentials:
+            return None
+        return cls(credentials)
 
     def get_job_alert_emails(
         self,
@@ -263,7 +273,12 @@ class GmailClient:
         return body
 
     def mark_as_read(self, message_id: str) -> bool:
-        """Mark an email as read."""
+        """
+        Mark an email as read.
+
+        Note: This requires gmail.modify scope. If the user only granted
+        gmail.readonly, this will fail gracefully and return False.
+        """
         try:
             self.service.users().messages().modify(
                 userId="me",
@@ -272,13 +287,21 @@ class GmailClient:
             ).execute()
             return True
         except Exception:
+            # May fail if user only granted readonly scope - that's OK
             return False
 
     def add_label(self, message_id: str, label_name: str) -> bool:
-        """Add a label to an email (creates label if needed)."""
+        """
+        Add a label to an email (creates label if needed).
+
+        Note: This requires gmail.labels scope. If the user only granted
+        gmail.readonly, this will fail gracefully and return False.
+        """
         try:
             # Get or create label
             label_id = self._get_or_create_label(label_name)
+            if not label_id:
+                return False
 
             self.service.users().messages().modify(
                 userId="me",
@@ -287,27 +310,36 @@ class GmailClient:
             ).execute()
             return True
         except Exception:
+            # May fail if user only granted readonly scope - that's OK
             return False
 
-    def _get_or_create_label(self, label_name: str) -> str:
-        """Get label ID, creating if it doesn't exist."""
-        # List existing labels
-        results = self.service.users().labels().list(userId="me").execute()
-        labels = results.get("labels", [])
+    def _get_or_create_label(self, label_name: str) -> str | None:
+        """
+        Get label ID, creating if it doesn't exist.
 
-        for label in labels:
-            if label["name"] == label_name:
-                return label["id"]
+        Returns None if labels scope is not available.
+        """
+        try:
+            # List existing labels
+            results = self.service.users().labels().list(userId="me").execute()
+            labels = results.get("labels", [])
 
-        # Create new label
-        label_body = {
-            "name": label_name,
-            "labelListVisibility": "labelShow",
-            "messageListVisibility": "show",
-        }
-        created = self.service.users().labels().create(
-            userId="me",
-            body=label_body,
-        ).execute()
+            for label in labels:
+                if label["name"] == label_name:
+                    return label["id"]
 
-        return created["id"]
+            # Create new label
+            label_body = {
+                "name": label_name,
+                "labelListVisibility": "labelShow",
+                "messageListVisibility": "show",
+            }
+            created = self.service.users().labels().create(
+                userId="me",
+                body=label_body,
+            ).execute()
+
+            return created["id"]
+        except Exception:
+            # May fail if user only granted readonly scope
+            return None

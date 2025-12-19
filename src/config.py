@@ -46,10 +46,16 @@ class Settings(BaseSettings):
     langfuse_public_key: str | None = None
     langfuse_base_url: str = "https://cloud.langfuse.com"
 
-    # Google OAuth (Gmail)
+    # Google OAuth (Login)
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+
+    # Gmail API OAuth (separate from login - different scopes)
+    gmail_redirect_uri: str = "http://localhost:8000/api/gmail/callback"
+
+    # Frontend URL for redirects
+    frontend_url: str = "http://localhost:3000"
 
     # Microsoft OAuth (Outlook)
     microsoft_client_id: str | None = None
@@ -58,6 +64,12 @@ class Settings(BaseSettings):
 
     # Encryption for storing user API keys
     encryption_key: str | None = None
+
+    # JWT Settings
+    jwt_secret_key: str = "dev-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
 
     # Rate Limiting
     max_applications_per_day: int = Field(default=10, ge=1, le=100)

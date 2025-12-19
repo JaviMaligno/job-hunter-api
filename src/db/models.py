@@ -87,6 +87,15 @@ class ApplicationStatus(str, enum.Enum):
     NEEDS_INTERVENTION = "needs_intervention"
 
 
+class AuthProvider(str, enum.Enum):
+    """Authentication provider types."""
+
+    EMAIL = "email"
+    GOOGLE = "google"
+    LINKEDIN = "linkedin"
+    GITHUB = "github"
+
+
 # ============================================================================
 # Models
 # ============================================================================
@@ -99,6 +108,13 @@ class User(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
+
+    # Authentication
+    password_hash = Column(Text, nullable=True)  # For email/password auth
+    auth_provider = Column(Enum(AuthProvider), default=AuthProvider.EMAIL)
+    provider_user_id = Column(String(255), nullable=True)  # OAuth provider's user ID
+    avatar_url = Column(String(500), nullable=True)
+    email_verified = Column(Boolean, default=False)
 
     # Encrypted Claude API key (optional - user can provide per-request)
     claude_api_key_encrypted = Column(Text, nullable=True)
@@ -144,6 +160,9 @@ class User(Base):
     skill_discoveries = relationship(
         "SkillDiscovery", back_populates="user", cascade="all, delete-orphan"
     )
+    refresh_tokens = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class EmailConnection(Base):
@@ -168,6 +187,24 @@ class EmailConnection(Base):
 
     # Relationships
     user = relationship("User", back_populates="email_connections")
+
+
+class RefreshToken(Base):
+    """Refresh tokens for JWT authentication."""
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    token_hash = Column(String(64), nullable=False, index=True)  # SHA256 hash
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="refresh_tokens")
 
 
 class Job(Base):

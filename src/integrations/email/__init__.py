@@ -2,14 +2,12 @@
 
 from src.integrations.email.gmail import (
     GmailClient,
-    authenticate_gmail,
-    is_authenticated,
-    logout_gmail,
+    get_user_gmail_credentials,
+    is_gmail_connected,
 )
 
 __all__ = [
     "GmailClient",
-    "authenticate_gmail",
-    "is_authenticated",
-    "logout_gmail",
+    "get_user_gmail_credentials",
+    "is_gmail_connected",
 ]
