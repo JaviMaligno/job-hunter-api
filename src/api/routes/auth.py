@@ -173,6 +173,114 @@ async def login(request: LoginRequest, db: DbDep) -> TokenResponse:
     )
 
 
+class GoogleLoginRequest(BaseModel):
+    """Request for Google OAuth login from NextAuth."""
+
+    email: EmailStr
+    name: str | None = None
+    image: str | None = None
+    access_token: str
+    refresh_token: str | None = None
+    expires_at: int | None = None  # Unix timestamp
+    scope: str | None = None
+
+
+class GoogleLoginResponse(BaseModel):
+    """Response for Google OAuth login."""
+
+    user_id: str
+    email: str
+    gmail_connected: bool
+
+
+@router.post("/google-login", response_model=GoogleLoginResponse)
+async def google_login(request: GoogleLoginRequest, db: DbDep) -> GoogleLoginResponse:
+    """
+    Handle Google OAuth login from NextAuth.
+
+    Creates or updates user and stores Gmail tokens for email access.
+    """
+    from src.db.models import EmailConnection, EmailProvider
+
+    # Find or create user
+    result = await db.execute(select(User).where(User.email == request.email))
+    user = result.scalar_one_or_none()
+
+    if user:
+        # Update existing user
+        if request.name and not user.full_name:
+            user.full_name = request.name
+        if request.image and not user.avatar_url:
+            user.avatar_url = request.image
+        user.auth_provider = AuthProvider.GOOGLE
+        user.email_verified = True
+    else:
+        # Create new user
+        user = User(
+            email=request.email,
+            full_name=request.name,
+            avatar_url=request.image,
+            auth_provider=AuthProvider.GOOGLE,
+            email_verified=True,
+        )
+        db.add(user)
+        await db.flush()
+
+    # Check if Gmail scopes are included
+    has_gmail_scope = (
+        request.scope
+        and "https://www.googleapis.com/auth/gmail" in request.scope
+    )
+
+    gmail_connected = False
+
+    if has_gmail_scope and request.access_token:
+        # Calculate token expiry
+        token_expires_at = None
+        if request.expires_at:
+            token_expires_at = datetime.fromtimestamp(request.expires_at)
+
+        # Find or create EmailConnection for Gmail
+        result = await db.execute(
+            select(EmailConnection).where(
+                EmailConnection.user_id == user.id,
+                EmailConnection.provider == EmailProvider.GMAIL,
+            )
+        )
+        connection = result.scalar_one_or_none()
+
+        if connection:
+            # Update existing connection
+            connection.access_token_encrypted = request.access_token
+            if request.refresh_token:
+                connection.refresh_token_encrypted = request.refresh_token
+            connection.token_expires_at = token_expires_at
+            connection.granted_scopes = request.scope or ""
+            connection.is_active = True
+        else:
+            # Create new connection
+            connection = EmailConnection(
+                user_id=user.id,
+                provider=EmailProvider.GMAIL,
+                access_token_encrypted=request.access_token,
+                refresh_token_encrypted=request.refresh_token,
+                token_expires_at=token_expires_at,
+                granted_scopes=request.scope or "",
+                is_active=True,
+            )
+            db.add(connection)
+
+        gmail_connected = True
+
+    await db.flush()
+
+    return GoogleLoginResponse(
+        user_id=str(user.id),
+        email=user.email,
+        gmail_connected=gmail_connected,
+    )
+
+
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_tokens(request: RefreshRequest, db: DbDep) -> TokenResponse:
     """
