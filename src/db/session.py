@@ -44,3 +44,14 @@ async def get_session():
             raise
         finally:
             await session.close()
+
+
+async def get_db():
+    """FastAPI dependency for database session."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

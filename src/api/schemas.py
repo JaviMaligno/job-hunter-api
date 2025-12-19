@@ -199,3 +199,43 @@ class CVAdaptResponse(BaseModel):
     key_highlights: list[str]
     job_id: UUID | None = None  # If saved to database
     material_ids: list[UUID] | None = None  # Created materials
+
+
+# ============================================================================
+# Email Sender Schemas
+# ============================================================================
+
+
+class EmailSender(BaseModel):
+    """Schema for an email sender/source."""
+
+    id: str = Field(..., description="Unique identifier for the sender")
+    name: str = Field(..., description="Display name for the sender")
+    pattern: str = Field(..., description="Email domain or pattern to match")
+    enabled: bool = Field(default=True, description="Whether this sender is active")
+    is_custom: bool = Field(default=False, description="Whether this is a user-added sender")
+
+
+class EmailSenderPreferences(BaseModel):
+    """Schema for user's email sender preferences."""
+
+    senders: list[EmailSender] = Field(default_factory=list, description="Custom senders added by user")
+    enabled_sender_ids: list[str] = Field(default_factory=list, description="IDs of default senders user has enabled")
+    disabled_sender_ids: list[str] = Field(default_factory=list, description="IDs of default senders user has disabled")
+
+
+class EmailSenderPreferencesUpdate(BaseModel):
+    """Schema for updating email sender preferences."""
+
+    enabled_sender_ids: list[str] | None = Field(default=None, description="Sender IDs to enable")
+    disabled_sender_ids: list[str] | None = Field(default=None, description="Sender IDs to disable")
+    custom_senders: list[EmailSender] | None = Field(default=None, description="Custom senders to add")
+    remove_sender_ids: list[str] | None = Field(default=None, description="Custom sender IDs to remove")
+
+
+class EmailSenderPreferencesResponse(BaseModel):
+    """Response schema for email sender preferences."""
+
+    default_senders: list[EmailSender] = Field(..., description="All default senders")
+    user_preferences: EmailSenderPreferences = Field(..., description="User's customizations")
+    effective_senders: list[EmailSender] = Field(..., description="Final merged list of active senders")

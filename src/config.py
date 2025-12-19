@@ -95,3 +95,33 @@ def get_settings() -> Settings:
 
 # Convenience access
 settings = get_settings()
+
+
+# Default job alert email senders - users can customize this list
+DEFAULT_JOB_EMAIL_SENDERS: list[dict] = [
+    # Major Job Platforms
+    {"id": "linkedin", "name": "LinkedIn", "pattern": "linkedin.com", "enabled": True},
+    {"id": "indeed", "name": "Indeed", "pattern": "indeed.com", "enabled": True},
+    {"id": "glassdoor", "name": "Glassdoor", "pattern": "glassdoor.com", "enabled": True},
+    {"id": "infojobs", "name": "InfoJobs", "pattern": "infojobs.net", "enabled": True},
+    # Specialized Platforms
+    {"id": "jackandjill", "name": "Jack & Jill", "pattern": "jackandjill.ai", "enabled": True},
+    {"id": "cord", "name": "Cord", "pattern": "cord.co", "enabled": True},
+    {"id": "angellist", "name": "AngelList/Wellfound", "pattern": "angel.co", "enabled": True},
+    {"id": "wellfound", "name": "Wellfound", "pattern": "wellfound.com", "enabled": True},
+    {"id": "remoteco", "name": "Remote.co", "pattern": "remote.co", "enabled": True},
+    {"id": "otta", "name": "Otta", "pattern": "otta.com", "enabled": True},
+    # ATS Platforms
+    {"id": "greenhouse", "name": "Greenhouse", "pattern": "greenhouse.io", "enabled": True},
+    {"id": "lever", "name": "Lever", "pattern": "lever.co", "enabled": True},
+    {"id": "workable", "name": "Workable", "pattern": "workable.com", "enabled": True},
+    {"id": "bamboohr", "name": "BambooHR", "pattern": "bamboohr.com", "enabled": False},
+    {"id": "ashby", "name": "Ashby", "pattern": "ashbyhq.com", "enabled": False},
+    {"id": "smartrecruiters", "name": "SmartRecruiters", "pattern": "smartrecruiters.com", "enabled": False},
+    # Regional Platforms
+    {"id": "totaljobs", "name": "TotalJobs", "pattern": "totaljobs.com", "enabled": False},
+    {"id": "reed", "name": "Reed", "pattern": "reed.co.uk", "enabled": False},
+    {"id": "monster", "name": "Monster", "pattern": "monster.com", "enabled": False},
+    {"id": "ziprecruiter", "name": "ZipRecruiter", "pattern": "ziprecruiter.com", "enabled": False},
+    {"id": "dice", "name": "Dice", "pattern": "dice.com", "enabled": False},
+]

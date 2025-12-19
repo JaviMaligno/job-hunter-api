@@ -13,7 +13,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from src.config import settings
+from src.config import settings, DEFAULT_JOB_EMAIL_SENDERS
 
 # Gmail API scopes
 SCOPES = [
@@ -121,6 +121,7 @@ class GmailClient:
         max_results: int = 50,
         after_date: datetime | None = None,
         labels: list[str] | None = None,
+        custom_senders: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Fetch emails that are likely job alerts.
@@ -129,6 +130,7 @@ class GmailClient:
             max_results: Maximum number of emails to fetch.
             after_date: Only fetch emails after this date.
             labels: Gmail labels to filter by (default: INBOX).
+            custom_senders: List of sender patterns to use instead of defaults.
 
         Returns:
             List of parsed email dictionaries.
@@ -136,15 +138,16 @@ class GmailClient:
         # Build query for job-related emails
         query_parts = []
 
-        # Common job alert senders
-        job_senders = [
-            "from:linkedin.com",
-            "from:indeed.com",
-            "from:glassdoor.com",
-            "from:infojobs.net",
-            "from:jobs-noreply@linkedin.com",
-            "from:jobalert-noreply@linkedin.com",
-        ]
+        # Use custom senders if provided, otherwise use defaults
+        if custom_senders:
+            sender_patterns = custom_senders
+        else:
+            sender_patterns = [
+                s["pattern"] for s in DEFAULT_JOB_EMAIL_SENDERS
+                if s.get("enabled", True)
+            ]
+
+        job_senders = [f"from:{pattern}" for pattern in sender_patterns]
         query_parts.append(f"({' OR '.join(job_senders)})")
 
         # Date filter
