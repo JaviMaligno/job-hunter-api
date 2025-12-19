@@ -19,12 +19,17 @@ from src.db.models import EmailConnection, EmailProvider, User
 router = APIRouter()
 
 # Gmail API scopes
-# - gmail.readonly: Read emails (required)
-# - email: Get user's email address for display (required for userinfo endpoint)
-GMAIL_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "email",
+# Required scopes (always requested)
+GMAIL_REQUIRED_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",  # Read emails
+    "email",  # Get user's email address
 ]
+
+# Optional scopes (user can choose)
+GMAIL_OPTIONAL_SCOPES = {
+    "labels": "https://www.googleapis.com/auth/gmail.labels",  # Manage labels
+    "modify": "https://www.googleapis.com/auth/gmail.modify",  # Mark as read, etc.
+}
 
 # OAuth state storage (in production, use Redis or database)
 _gmail_oauth_states: dict[str, dict] = {}
@@ -41,6 +46,9 @@ class GmailStatusResponse(BaseModel):
     connected: bool
     email: str | None = None
     last_sync_at: datetime | None = None
+    # Granted optional scopes
+    can_manage_labels: bool = False
+    can_modify: bool = False
 
 
 class GmailConnectionResponse(BaseModel):
@@ -55,13 +63,13 @@ class GmailConnectionResponse(BaseModel):
 # ============================================================================
 
 
-def _get_gmail_authorization_url(state: str, user_id: str) -> str:
+def _get_gmail_authorization_url(state: str, scopes: list[str]) -> str:
     """Generate Gmail OAuth authorization URL."""
     params = {
         "client_id": settings.google_client_id,
         "redirect_uri": settings.gmail_redirect_uri,
         "response_type": "code",
-        "scope": " ".join(GMAIL_SCOPES),
+        "scope": " ".join(scopes),
         "state": state,
         "access_type": "offline",  # Get refresh token
         "prompt": "consent",  # Always show consent to get refresh token
@@ -120,12 +128,21 @@ async def _get_gmail_user_email(access_token: str) -> str:
 
 
 @router.get("/connect/{user_id}")
-async def initiate_gmail_connection(user_id: UUID, db: DbDep) -> RedirectResponse:
+async def initiate_gmail_connection(
+    user_id: UUID,
+    db: DbDep,
+    labels: Annotated[bool, Query(description="Request labels management permission")] = False,
+    modify: Annotated[bool, Query(description="Request modify permission (mark as read)")] = False,
+) -> RedirectResponse:
     """
     Initiate Gmail OAuth flow for a user.
 
     This redirects the user to Google's authorization page.
     After authorization, Google redirects back to /api/gmail/callback.
+
+    Query params:
+    - labels: Request permission to manage labels
+    - modify: Request permission to mark emails as read
     """
     # Verify user exists
     result = await db.execute(select(User).where(User.id == user_id))
@@ -143,14 +160,26 @@ async def initiate_gmail_connection(user_id: UUID, db: DbDep) -> RedirectRespons
             detail="Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
         )
 
+    # Build scopes list
+    scopes = GMAIL_REQUIRED_SCOPES.copy()
+    requested_optional = []
+    if labels:
+        scopes.append(GMAIL_OPTIONAL_SCOPES["labels"])
+        requested_optional.append("labels")
+    if modify:
+        scopes.append(GMAIL_OPTIONAL_SCOPES["modify"])
+        requested_optional.append("modify")
+
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
     _gmail_oauth_states[state] = {
         "user_id": str(user_id),
         "created_at": datetime.now(timezone.utc),
+        "requested_scopes": scopes,
+        "requested_optional": requested_optional,
     }
 
-    auth_url = _get_gmail_authorization_url(state, str(user_id))
+    auth_url = _get_gmail_authorization_url(state, scopes)
     return RedirectResponse(url=auth_url)
 
 
@@ -182,6 +211,8 @@ async def gmail_oauth_callback(
         return RedirectResponse(url=error_url)
 
     user_id = UUID(state_data["user_id"])
+    requested_scopes = state_data.get("requested_scopes", GMAIL_REQUIRED_SCOPES)
+    requested_optional = state_data.get("requested_optional", [])
 
     try:
         # Exchange code for tokens
@@ -189,6 +220,8 @@ async def gmail_oauth_callback(
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in", 3600)
+        # Google returns the actual granted scopes
+        granted_scope_str = token_data.get("scope", "")
 
         if not access_token:
             raise ValueError("No access token received")
@@ -215,6 +248,7 @@ async def gmail_oauth_callback(
             connection.access_token_encrypted = access_token  # TODO: encrypt
             connection.refresh_token_encrypted = refresh_token  # TODO: encrypt
             connection.token_expires_at = token_expires_at
+            connection.granted_scopes = granted_scope_str
             connection.is_active = True
         else:
             # Create new connection
@@ -224,6 +258,7 @@ async def gmail_oauth_callback(
                 access_token_encrypted=access_token,  # TODO: encrypt
                 refresh_token_encrypted=refresh_token,  # TODO: encrypt
                 token_expires_at=token_expires_at,
+                granted_scopes=granted_scope_str,
                 is_active=True,
             )
             db.add(connection)
@@ -280,10 +315,17 @@ async def get_gmail_status(user_id: UUID, db: DbDep) -> GmailStatusResponse:
             # Token might be revoked
             pass
 
+    # Check granted scopes
+    granted_scopes = connection.granted_scopes or ""
+    can_manage_labels = GMAIL_OPTIONAL_SCOPES["labels"] in granted_scopes
+    can_modify = GMAIL_OPTIONAL_SCOPES["modify"] in granted_scopes
+
     return GmailStatusResponse(
         connected=True,
         email=email,
         last_sync_at=connection.last_sync_at,
+        can_manage_labels=can_manage_labels,
+        can_modify=can_modify,
     )
 
 

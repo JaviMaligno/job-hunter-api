@@ -180,6 +180,9 @@ class EmailConnection(Base):
     refresh_token_encrypted = Column(Text)
     token_expires_at = Column(DateTime)
 
+    # Granted OAuth scopes (comma-separated)
+    granted_scopes = Column(Text, default="")
+
     is_active = Column(Boolean, default=True)
     last_sync_at = Column(DateTime)
 
