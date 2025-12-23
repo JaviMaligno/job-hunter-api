@@ -3,7 +3,9 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import func, select
 
 from src.agents.cv_adapter import (
     CoverLetterAgent,
@@ -11,10 +13,230 @@ from src.agents.cv_adapter import (
     CVAdapterAgent,
     CVAdapterInput,
 )
-from src.api.dependencies import ClaudeDep
-from src.api.schemas import CVAdaptRequest, CVAdaptResponse
+from src.api.dependencies import ClaudeDep, DbDep
+from src.api.schemas import (
+    CVAdaptRequest,
+    CVAdaptResponse,
+    JobCreate,
+    JobListResponse,
+    JobResponse,
+    JobUpdate,
+)
+from src.db.models import Job, JobStatus
 
 router = APIRouter()
+
+
+# ============================================================================
+# Job Import Schema
+# ============================================================================
+
+
+class JobImportRequest(BaseModel):
+    """Request to import a job from URL."""
+
+    url: str
+
+
+class JobImportResponse(BaseModel):
+    """Response from job import."""
+
+    job: JobResponse
+    message: str
+    scraped_fields: list[str]  # Fields successfully scraped from the URL
+
+
+# ============================================================================
+# Job CRUD Endpoints
+# ============================================================================
+
+
+@router.get("/", response_model=JobListResponse)
+async def list_jobs(
+    db: DbDep,
+    user_id: Annotated[UUID, Query(description="User ID to filter jobs")],
+    status: Annotated[str | None, Query(description="Filter by status")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+):
+    """List jobs in the pipeline for a user."""
+    # Build query
+    query = select(Job).where(Job.user_id == user_id)
+
+    if status:
+        try:
+            status_enum = JobStatus(status)
+            query = query.filter(Job.status == status_enum)
+        except ValueError:
+            pass  # Invalid status, ignore filter
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.order_by(Job.created_at.desc()).offset(offset).limit(page_size)
+
+    # Execute query
+    result = await db.execute(query)
+    jobs = result.scalars().all()
+
+    return JobListResponse(
+        jobs=[JobResponse.model_validate(job) for job in jobs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/{job_id}", response_model=JobResponse)
+async def get_job(job_id: UUID, db: DbDep):
+    """Get a specific job by ID."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return JobResponse.model_validate(job)
+
+
+@router.post("/", response_model=JobResponse)
+async def create_job(
+    job_data: JobCreate,
+    db: DbDep,
+    user_id: Annotated[UUID, Query(description="User ID for the job")],
+):
+    """Create a new job in the pipeline."""
+    job = Job(
+        user_id=user_id,
+        source_url=job_data.source_url,
+        title=job_data.title,
+        company=job_data.company,
+        location=job_data.location,
+        job_type=job_data.job_type,
+        description_raw=job_data.description_raw,
+        source_platform=job_data.source_platform,
+        status=JobStatus.INBOX,
+    )
+
+    db.add(job)
+    await db.flush()
+    await db.refresh(job)
+
+    return JobResponse.model_validate(job)
+
+
+@router.post("/import-url", response_model=JobImportResponse)
+async def import_job_from_url(
+    request: JobImportRequest,
+    db: DbDep,
+    user_id: Annotated[UUID, Query(description="User ID for the job")],
+    skip_scraping: Annotated[bool, Query(description="Skip scraping and just save URL")] = False,
+):
+    """
+    Import a job from a URL.
+
+    Scrapes the job page to extract title, company, description, and other details.
+    Set skip_scraping=true to skip scraping and just save the URL.
+    """
+    from src.integrations.jobs.scraper import scrape_job_url
+
+    # Scrape job details from URL
+    scraped = None
+    scrape_message = ""
+
+    if not skip_scraping:
+        scraped = await scrape_job_url(request.url)
+        if not scraped.success:
+            scrape_message = f" (Scraping failed: {scraped.error})"
+
+    # Create job with scraped or placeholder data
+    job = Job(
+        user_id=user_id,
+        source_url=request.url,
+        title=scraped.title if scraped and scraped.title else "Job Opening",
+        company=scraped.company if scraped else None,
+        location=scraped.location if scraped else None,
+        job_type=scraped.job_type if scraped else None,
+        description_raw=scraped.description if scraped else None,
+        source_platform=scraped.platform if scraped else "unknown",
+        status=JobStatus.INBOX,
+    )
+
+    db.add(job)
+    await db.flush()
+    await db.refresh(job)
+
+    # Build list of successfully scraped fields
+    scraped_fields: list[str] = []
+    if scraped and scraped.success:
+        if scraped.title:
+            scraped_fields.append("title")
+        if scraped.company:
+            scraped_fields.append("company")
+        if scraped.location:
+            scraped_fields.append("location")
+        if scraped.description:
+            scraped_fields.append("description")
+        if scraped.job_type:
+            scraped_fields.append("job_type")
+        if scraped.salary:
+            scraped_fields.append("salary")
+
+    platform = scraped.platform if scraped else "unknown"
+    if scraped and scraped.success and scraped.title:
+        message = f"Job imported successfully from {platform.title()}."
+    else:
+        message = f"Job imported from {platform.title()}.{scrape_message} You can edit the job to add more details."
+
+    return JobImportResponse(
+        job=JobResponse.model_validate(job),
+        message=message,
+        scraped_fields=scraped_fields,
+    )
+
+
+@router.patch("/{job_id}", response_model=JobResponse)
+async def update_job(job_id: UUID, updates: JobUpdate, db: DbDep):
+    """Update a job's status or details."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Apply updates
+    update_data = updates.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(job, field, value)
+
+    await db.flush()
+    await db.refresh(job)
+
+    return JobResponse.model_validate(job)
+
+
+@router.delete("/{job_id}")
+async def delete_job(job_id: UUID, db: DbDep):
+    """Delete a job from the pipeline."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    await db.delete(job)
+    await db.flush()
+
+    return {"message": "Job deleted successfully"}
+
+
+# ============================================================================
+# CV Adaptation Endpoint
+# ============================================================================
 
 
 @router.post("/adapt", response_model=CVAdaptResponse)
@@ -84,63 +306,4 @@ async def adapt_cv_for_job(
         skills_matched=cv_result.skills_matched,
         skills_missing=cv_result.skills_missing,
         key_highlights=cv_result.key_highlights + cover_result.talking_points,
-    )
-
-
-@router.get("/")
-async def list_jobs(
-    status: Annotated[str | None, Query(description="Filter by status")] = None,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
-):
-    """
-    List jobs in the pipeline.
-
-    TODO: Implement with database integration.
-    """
-    return {
-        "jobs": [],
-        "total": 0,
-        "page": page,
-        "page_size": page_size,
-        "message": "Database integration coming soon",
-    }
-
-
-@router.get("/{job_id}")
-async def get_job(job_id: UUID):
-    """
-    Get a specific job by ID.
-
-    TODO: Implement with database integration.
-    """
-    raise HTTPException(
-        status_code=501,
-        detail="Database integration coming soon",
-    )
-
-
-@router.post("/")
-async def create_job():
-    """
-    Create a new job in the pipeline.
-
-    TODO: Implement with database integration.
-    """
-    raise HTTPException(
-        status_code=501,
-        detail="Database integration coming soon",
-    )
-
-
-@router.patch("/{job_id}")
-async def update_job(job_id: UUID):
-    """
-    Update a job's status or details.
-
-    TODO: Implement with database integration.
-    """
-    raise HTTPException(
-        status_code=501,
-        detail="Database integration coming soon",
     )

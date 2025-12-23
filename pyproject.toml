@@ -38,6 +38,7 @@ beautifulsoup4 = "^4.14.3"
 playwright = "^1.49.0"
 websockets = "^14.0"
 click = "8.1.7"
+fpdf2 = "^2.8.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

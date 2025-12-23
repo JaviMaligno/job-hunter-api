@@ -49,6 +49,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UserInfo(BaseModel):
+    """Basic user info for token response."""
+
+    id: str
+    email: str
+
+
 class TokenResponse(BaseModel):
     """Token response for login/register."""
 
@@ -56,6 +63,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int  # seconds
+    user: UserInfo | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -127,6 +135,7 @@ async def register(request: RegisterRequest, db: DbDep) -> TokenResponse:
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
+        user=UserInfo(id=str(user.id), email=user.email),
     )
 
 
@@ -170,6 +179,7 @@ async def login(request: LoginRequest, db: DbDep) -> TokenResponse:
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
+        user=UserInfo(id=str(user.id), email=user.email),
     )
 
 

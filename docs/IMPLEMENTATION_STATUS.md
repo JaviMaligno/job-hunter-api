@@ -1,8 +1,8 @@
 # Implementation Status
 
-> Last Updated: 2025-12-15
-> Current Phase: Phase 4 - Dashboard + Modes (Not Started)
-> Overall Progress: 85%
+> Last Updated: 2025-12-22
+> Current Phase: Phase 4 - Dashboard + Modes (In Progress)
+> Overall Progress: 92%
 
 ## Quick Status
 
@@ -11,7 +11,7 @@
 | Phase 1 - MVP Core | **Complete** | 100% | - |
 | Phase 2 - Browser Automation | **Complete** | 100% | - |
 | Phase 3 - Cloud Deploy | **Complete** | 100% | - |
-| Phase 4 - Dashboard + Modes | Not Started | 0% | - |
+| Phase 4 - Dashboard + Modes | **In Progress** | 75% | - |
 
 ---
 
@@ -184,14 +184,49 @@ Render (job-hunter-api) - Frankfurt region
 
 ---
 
-## Phase 4 - Dashboard + Modes
+## Phase 4 - Dashboard + Modes (In Progress)
 
 ### Objectives
-- [ ] Next.js dashboard (separate repo)
-- [ ] Kanban board UI
+- [x] Next.js dashboard (job-hunter-dashboard repo)
+- [x] Kanban board UI with drag & drop
+- [x] Google OAuth login
+- [x] Gmail connection from UI
+- [x] Email scanning from UI
+- [x] CV Upload component (PDF/DOCX/TXT)
+- [x] Job import from URL with scraping
+- [x] CV Adapt dialog with saved CV support
+- [x] Email parser with 50+ platforms
 - [ ] Semi-auto mode
 - [ ] Auto-apply with rules
 - [ ] Rate limiting
+
+### Milestones
+| Milestone | Description | Status | Date |
+|-----------|-------------|--------|------|
+| M4.1 | Next.js dashboard setup | Done | 2025-12-18 |
+| M4.2 | Kanban board UI | Done | 2025-12-18 |
+| M4.3 | Google OAuth integration | Done | 2025-12-19 |
+| M4.4 | Gmail connection UI | Done | 2025-12-20 |
+| M4.5 | Email scanning UI | Done | 2025-12-20 |
+| M4.6 | CV Upload API + UI | Done | 2025-12-22 |
+| M4.7 | Job URL scraper | Done | 2025-12-22 |
+| M4.8 | CV Adapt with saved CV | Done | 2025-12-22 |
+| M4.9 | Email parser 50+ platforms | Done | 2025-12-22 |
+| M4.10 | Semi-auto mode | Pending | - |
+| M4.11 | Auto-apply with rules | Pending | - |
+
+### Phase 4 Accomplishments
+- [2025-12-18] Next.js dashboard created (job-hunter-dashboard)
+- [2025-12-18] Kanban board with drag & drop (react-beautiful-dnd)
+- [2025-12-19] NextAuth.js with Google OAuth
+- [2025-12-20] Gmail connection UI in profile page
+- [2025-12-20] Email sender preferences UI
+- [2025-12-22] CV Upload endpoints (PDF/DOCX/TXT extraction)
+- [2025-12-22] CVUpload component in profile page
+- [2025-12-22] Job URL scraper with platform-specific extractors
+- [2025-12-22] AddJobDialog shows scraped fields
+- [2025-12-22] CVAdaptDialog uses saved CV automatically
+- [2025-12-22] Email parser expanded to 50+ job platforms
 
 ---
 
@@ -204,6 +239,8 @@ Render (job-hunter-api) - Frankfurt region
 | Supported ATS platforms | 2 | 5+ | Generic + Breezy.hr |
 | Agents implemented | 5 | 5 | CV, Cover, Email, FormFiller, QuestionAnswerer |
 | Unit tests passing | 44 | 50+ | All green |
+| Job platforms in email parser | 50+ | - | LinkedIn, Indeed, Greenhouse, etc. |
+| Dashboard features | 75% | 100% | Missing: semi-auto, auto-apply |
 
 ---
 
@@ -249,3 +286,15 @@ Render (job-hunter-api) - Frankfurt region
 | 2025-12-15 | Auto-deploy CI/CD from main branch enabled | Claude |
 | 2025-12-15 | Health check and API endpoints tested | Claude |
 | 2025-12-15 | **Phase 3 completed** | Claude |
+| 2025-12-18 | Phase 4 started: Dashboard + Modes | Claude |
+| 2025-12-18 | Next.js dashboard (job-hunter-dashboard) | Claude |
+| 2025-12-18 | Kanban board with drag & drop | Claude |
+| 2025-12-19 | NextAuth.js Google OAuth | Claude |
+| 2025-12-20 | Gmail connection UI | Claude |
+| 2025-12-20 | Email sender preferences | Claude |
+| 2025-12-22 | CV Upload API (PDF/DOCX/TXT) | Claude |
+| 2025-12-22 | CVUpload component in profile | Claude |
+| 2025-12-22 | Job URL scraper (LinkedIn, Indeed, Greenhouse, etc.) | Claude |
+| 2025-12-22 | scraped_fields in JobImportResponse | Claude |
+| 2025-12-22 | CVAdaptDialog with saved CV support | Claude |
+| 2025-12-22 | Email parser expanded to 50+ platforms | Claude |

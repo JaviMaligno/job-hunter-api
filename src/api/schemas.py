@@ -101,11 +101,18 @@ class JobResponse(JobBase):
     id: UUID
     user_id: UUID
     status: JobStatus
+    source_platform: str | None = None
+    description_summary: str | None = None
+    requirements_extracted: list[str] | None = None
+    salary_range: str | None = None
     match_score: int | None = None
+    match_explanation: str | None = None
     skills_matched: list[str] | None = None
     skills_missing: list[str] | None = None
     blocker_type: BlockerType | None = None
+    blocker_details: str | None = None
     ats_type: str | None = None
+    deadline: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

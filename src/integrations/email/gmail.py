@@ -167,16 +167,27 @@ class GmailClient:
 
         query = " ".join(query_parts)
 
+        # DEBUG: Print the query being used
+        print(f"[DEBUG] Gmail query: {query}")
+        print(f"[DEBUG] Sender patterns: {sender_patterns}")
+
         # Fetch message IDs
         label_ids = labels or ["INBOX"]
-        results = self.service.users().messages().list(
-            userId="me",
-            q=query,
-            labelIds=label_ids,
-            maxResults=max_results,
-        ).execute()
+        try:
+            results = self.service.users().messages().list(
+                userId="me",
+                q=query,
+                labelIds=label_ids,
+                maxResults=max_results,
+            ).execute()
+            print(f"[DEBUG] Gmail API response keys: {results.keys()}")
+            print(f"[DEBUG] Gmail API resultSizeEstimate: {results.get('resultSizeEstimate', 'N/A')}")
+        except Exception as e:
+            print(f"[DEBUG] Gmail API error: {e}")
+            raise
 
         messages = results.get("messages", [])
+        print(f"[DEBUG] Found {len(messages)} messages matching query")
 
         # Fetch full message content
         emails = []

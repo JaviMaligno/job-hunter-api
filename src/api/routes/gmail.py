@@ -58,6 +58,44 @@ class GmailConnectionResponse(BaseModel):
     message: str
 
 
+class EmailScanRequest(BaseModel):
+    """Request for scanning emails."""
+
+    max_emails: int = 20
+    unread_only: bool = False
+
+
+class ExtractedJobInfo(BaseModel):
+    """Info about an extracted job from email."""
+
+    title: str
+    company: str
+    location: str | None = None
+    job_url: str | None = None
+    source_platform: str | None = None
+
+
+class ScannedEmail(BaseModel):
+    """Info about a scanned email."""
+
+    message_id: str
+    subject: str
+    sender: str
+    received_at: str
+    jobs_extracted: list[ExtractedJobInfo] = []
+
+
+class EmailScanResponse(BaseModel):
+    """Response from email scanning."""
+
+    success: bool
+    emails_scanned: int
+    jobs_extracted: int
+    jobs_skipped_duplicates: int = 0
+    emails: list[ScannedEmail] = []
+    message: str | None = None
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -370,3 +408,153 @@ async def disconnect_gmail(user_id: UUID, db: DbDep) -> GmailConnectionResponse:
         success=True,
         message="Gmail disconnected successfully",
     )
+
+
+@router.post("/scan/{user_id}", response_model=EmailScanResponse)
+async def scan_emails(
+    user_id: UUID,
+    db: DbDep,
+    request: EmailScanRequest | None = None,
+    save_jobs: Annotated[bool, Query(description="Save extracted jobs to database")] = True,
+) -> EmailScanResponse:
+    """
+    Scan Gmail for job alert emails and extract job information.
+
+    This fetches emails from known job platforms (LinkedIn, Indeed, etc.)
+    and parses them to extract job postings.
+
+    Query params:
+    - save_jobs: If true (default), saves extracted jobs to database
+    """
+    from src.db.models import Job, JobStatus
+    from src.integrations.email.gmail import GmailClient
+    from src.integrations.email.parser import parse_job_email
+
+    # Get request params with defaults
+    max_emails = request.max_emails if request else 20
+    unread_only = request.unread_only if request else False
+
+    # Get Gmail client for user
+    gmail_client = await GmailClient.for_user(db, user_id)
+
+    if not gmail_client:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gmail not connected. Please connect Gmail first.",
+        )
+
+    try:
+        # Fetch emails
+        if unread_only:
+            emails = gmail_client.get_all_unread_emails(max_results=max_emails)
+        else:
+            emails = gmail_client.get_job_alert_emails(max_results=max_emails)
+
+        # Update last sync timestamp
+        result = await db.execute(
+            select(EmailConnection).where(
+                EmailConnection.user_id == user_id,
+                EmailConnection.provider == EmailProvider.GMAIL,
+            )
+        )
+        connection = result.scalar_one_or_none()
+        if connection:
+            connection.last_sync_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            await db.flush()
+
+        # Get existing job URLs for this user to avoid duplicates
+        existing_urls = set()
+        if save_jobs:
+            existing_jobs_result = await db.execute(
+                select(Job.source_url).where(Job.user_id == user_id)
+            )
+            existing_urls = {row[0] for row in existing_jobs_result.fetchall() if row[0]}
+
+        # Parse emails and extract jobs
+        total_jobs_extracted = 0
+        total_skipped_duplicates = 0
+        scanned_emails = []
+
+        for email in emails:
+            body = email.get("body", "")
+            sender = email.get("sender", "")
+            subject = email.get("subject", "")
+
+            # Parse email to extract jobs
+            extracted_jobs = parse_job_email(body, sender, subject)
+            print(f"[DEBUG] Email: {subject[:50]}... - Body length: {len(body)} chars")
+            print(f"[DEBUG] Parser found {len(extracted_jobs)} jobs")
+            for ej in extracted_jobs[:3]:
+                print(f"[DEBUG]   Job: {ej.title} at {ej.company} - {ej.job_url[:60] if ej.job_url else 'No URL'}...")
+
+            # Convert to response format
+            jobs_info = []
+            for extracted in extracted_jobs:
+                # Skip if URL already exists
+                if extracted.job_url and extracted.job_url in existing_urls:
+                    total_skipped_duplicates += 1
+                    continue
+
+                jobs_info.append(
+                    ExtractedJobInfo(
+                        title=extracted.title,
+                        company=extracted.company,
+                        location=extracted.location,
+                        job_url=extracted.job_url,
+                        source_platform=extracted.source_platform,
+                    )
+                )
+
+                # Save job to database if requested
+                if save_jobs and extracted.job_url:
+                    job = Job(
+                        user_id=user_id,
+                        source_url=extracted.job_url,
+                        title=extracted.title,
+                        company=extracted.company,
+                        location=extracted.location,
+                        source_platform=extracted.source_platform,
+                        status=JobStatus.INBOX,
+                    )
+                    db.add(job)
+                    existing_urls.add(extracted.job_url)  # Prevent duplicates within same scan
+
+            total_jobs_extracted += len(jobs_info)
+
+            scanned_emails.append(
+                ScannedEmail(
+                    message_id=email.get("message_id", ""),
+                    subject=subject,
+                    sender=sender,
+                    received_at=email.get("received_at", ""),
+                    jobs_extracted=jobs_info,
+                )
+            )
+
+        # Flush all new jobs
+        if save_jobs and total_jobs_extracted > 0:
+            await db.flush()
+
+        # Build informative message
+        msg_parts = [f"Scanned {len(scanned_emails)} emails"]
+        if total_jobs_extracted > 0:
+            msg_parts.append(f"extracted {total_jobs_extracted} new jobs")
+        if total_skipped_duplicates > 0:
+            msg_parts.append(f"skipped {total_skipped_duplicates} duplicates")
+        if total_jobs_extracted == 0 and total_skipped_duplicates == 0:
+            msg_parts.append("no new jobs found")
+
+        return EmailScanResponse(
+            success=True,
+            emails_scanned=len(scanned_emails),
+            jobs_extracted=total_jobs_extracted,
+            jobs_skipped_duplicates=total_skipped_duplicates,
+            emails=scanned_emails,
+            message=", ".join(msg_parts),
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error scanning emails: {str(e)}",
+        )
