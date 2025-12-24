@@ -26,14 +26,20 @@ async def get_claude_dependency(
     """
     Dependency to get Claude client.
 
-    Users can provide their own API key via X-Anthropic-Api-Key header.
-    Falls back to environment variable if not provided.
+    Supports:
+    1. AWS Bedrock (if BEDROCK_ENABLED=true) - uses AWS credentials
+    2. Direct Anthropic API - requires API key from header or environment
     """
+    # If Bedrock is enabled, no API key is needed
+    if settings.bedrock_enabled:
+        return get_claude_client()
+
+    # Otherwise, require an API key
     api_key = x_anthropic_api_key or settings.anthropic_api_key
     if not api_key:
         raise HTTPException(
             status_code=401,
-            detail="Anthropic API key required. Provide via X-Anthropic-Api-Key header or configure ANTHROPIC_API_KEY environment variable.",
+            detail="Anthropic API key required. Provide via X-Anthropic-Api-Key header, configure ANTHROPIC_API_KEY, or enable BEDROCK_ENABLED=true.",
         )
     return get_claude_client(api_key)
 

@@ -255,6 +255,10 @@ async def adapt_cv_for_job(
 
     Requires X-Anthropic-Api-Key header or configured ANTHROPIC_API_KEY.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("CV adapt endpoint called")
+
     if not request.job_description and not request.job_url:
         raise HTTPException(
             status_code=400,
@@ -276,34 +280,47 @@ async def adapt_cv_for_job(
             detail="Job URL scraping not yet implemented. Please provide job_description directly.",
         )
 
-    # Adapt CV
-    cv_agent = CVAdapterAgent(claude_api_key=claude.api_key)
-    cv_input = CVAdapterInput(
-        base_cv=request.cv_content,
-        job_description=job_description,
-        job_title=request.job_title,
-        company=request.company,
-        language=request.language,
-    )
-    cv_result = await cv_agent.run(cv_input)
+    # Get API key if available (Anthropic has api_key, AnthropicBedrock doesn't)
+    api_key = getattr(claude, "api_key", None)
 
-    # Generate cover letter
-    cover_agent = CoverLetterAgent(claude_api_key=claude.api_key)
-    cover_input = CoverLetterInput(
-        cv_content=cv_result.adapted_cv,
-        job_description=job_description,
-        job_title=request.job_title,
-        company=request.company,
-        language=request.language,
-    )
-    cover_result = await cover_agent.run(cover_input)
+    try:
+        # Adapt CV
+        logger.info("Creating CV adapter agent")
+        cv_agent = CVAdapterAgent(claude_api_key=api_key)
+        cv_input = CVAdapterInput(
+            base_cv=request.cv_content,
+            job_description=job_description,
+            job_title=request.job_title,
+            company=request.company,
+            language=request.language,
+        )
+        logger.info("Running CV adapter agent")
+        cv_result = await cv_agent.run(cv_input)
+        logger.info(f"CV adaptation complete, match_score: {cv_result.match_score}")
 
-    return CVAdaptResponse(
-        adapted_cv=cv_result.adapted_cv,
-        cover_letter=cover_result.cover_letter,
-        match_score=cv_result.match_score,
-        changes_made=cv_result.changes_made,
-        skills_matched=cv_result.skills_matched,
-        skills_missing=cv_result.skills_missing,
-        key_highlights=cv_result.key_highlights + cover_result.talking_points,
-    )
+        # Generate cover letter
+        logger.info("Creating cover letter agent")
+        cover_agent = CoverLetterAgent(claude_api_key=api_key)
+        cover_input = CoverLetterInput(
+            cv_content=cv_result.adapted_cv,
+            job_description=job_description,
+            job_title=request.job_title,
+            company=request.company,
+            language=request.language,
+        )
+        logger.info("Running cover letter agent")
+        cover_result = await cover_agent.run(cover_input)
+        logger.info("Cover letter generation complete")
+
+        return CVAdaptResponse(
+            adapted_cv=cv_result.adapted_cv,
+            cover_letter=cover_result.cover_letter,
+            match_score=cv_result.match_score,
+            changes_made=cv_result.changes_made,
+            skills_matched=cv_result.skills_matched,
+            skills_missing=cv_result.skills_missing,
+            key_highlights=cv_result.key_highlights + cover_result.talking_points,
+        )
+    except Exception as e:
+        logger.exception(f"Error in CV adaptation: {e}")
+        raise HTTPException(status_code=500, detail=f"CV adaptation failed: {str(e)}")

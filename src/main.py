@@ -7,18 +7,29 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import settings
-from src.integrations.langfuse.tracing import flush_langfuse, init_langfuse, shutdown_langfuse
+
+# Try to import langfuse tracing, but make it optional
+try:
+    from src.integrations.langfuse.tracing import flush_langfuse, init_langfuse, shutdown_langfuse
+    LANGFUSE_AVAILABLE = True
+except Exception:
+    LANGFUSE_AVAILABLE = False
+    def init_langfuse(): pass
+    def flush_langfuse(): pass
+    def shutdown_langfuse(): pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager."""
     # Startup
-    init_langfuse()
+    if LANGFUSE_AVAILABLE:
+        init_langfuse()
     yield
     # Shutdown
-    flush_langfuse()
-    shutdown_langfuse()
+    if LANGFUSE_AVAILABLE:
+        flush_langfuse()
+        shutdown_langfuse()
 
 
 app = FastAPI(
@@ -27,6 +38,27 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Global exception handler to log unhandled errors
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import logging
+import traceback
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Log and handle all unhandled exceptions."""
+    logger.error(f"Unhandled error: {type(exc).__name__}: {exc}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)}"},
+    )
+
 
 # CORS middleware
 app.add_middleware(
