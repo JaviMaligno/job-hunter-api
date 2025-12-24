@@ -40,6 +40,7 @@ websockets = "^14.0"
 click = "8.1.7"
 fpdf2 = "^2.8.5"
 google-genai = "^1.56.0"
+twocaptcha-python = "^0.0.4"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

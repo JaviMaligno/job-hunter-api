@@ -2,11 +2,12 @@
 Gemini-based Job Application Orchestrator Agent.
 
 This agent uses Gemini 2.5 with Chrome DevTools MCP for browser automation
-to fill job application forms.
+to fill job application forms. Includes automatic CAPTCHA solving via 2captcha.
 """
 
 import asyncio
 import json
+import logging
 import os
 from typing import Any
 
@@ -15,6 +16,17 @@ from pydantic import BaseModel, Field
 from google import genai
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+# CAPTCHA solver (optional)
+try:
+    from src.integrations.captcha.solver import CaptchaSolver, CaptchaType
+    CAPTCHA_SOLVER_AVAILABLE = True
+except ImportError:
+    CAPTCHA_SOLVER_AVAILABLE = False
+    CaptchaSolver = None
+    CaptchaType = None
+
+logger = logging.getLogger(__name__)
 
 # Try to import langfuse, but make it optional
 try:
@@ -80,9 +92,22 @@ class FieldFilled(BaseModel):
 class BlockerDetected(BaseModel):
     """Information about a detected blocker."""
     blocker_type: str  # captcha, login_required, file_upload, multi_step
+    captcha_subtype: str | None = None  # turnstile, hcaptcha, recaptcha
     description: str
     screenshot_path: str | None = None
     can_auto_resolve: bool = False
+    auto_resolved: bool = False
+    resolution_error: str | None = None
+
+
+class CaptchaSolveInfo(BaseModel):
+    """Information about CAPTCHA solving attempt."""
+    attempted: bool = False
+    success: bool = False
+    captcha_type: str | None = None
+    solve_time_seconds: float = 0.0
+    cost_usd: float = 0.0
+    error: str | None = None
 
 
 class OrchestratorOutput(BaseModel):
@@ -91,6 +116,7 @@ class OrchestratorOutput(BaseModel):
     status: str  # completed, paused, failed, needs_intervention
     fields_filled: list[FieldFilled] = Field(default_factory=list)
     blocker: BlockerDetected | None = None
+    captcha_info: CaptchaSolveInfo | None = None
     final_url: str | None = None
     screenshot_path: str | None = None
     error_message: str | None = None
@@ -138,6 +164,8 @@ Always be thorough but cautious - don't submit until all required fields are fil
         api_key: str | None = None,
         model: str | None = None,
         max_retries: int = 3,
+        captcha_api_key: str | None = None,
+        auto_solve_captcha: bool = True,
     ):
         """
         Initialize the Gemini orchestrator.
@@ -146,6 +174,8 @@ Always be thorough but cautious - don't submit until all required fields are fil
             api_key: Gemini API key (uses GEMINI_API_KEY env var if not provided)
             model: Model to use (defaults to MODEL_FALLBACK for reliability)
             max_retries: Maximum retries for failed operations
+            captcha_api_key: 2captcha API key (uses TWOCAPTCHA_API_KEY env var if not provided)
+            auto_solve_captcha: Whether to automatically solve CAPTCHAs
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
@@ -154,9 +184,20 @@ Always be thorough but cautious - don't submit until all required fields are fil
         self.client = genai.Client(api_key=self.api_key)
         self.model = model or self.MODEL_FALLBACK
         self.max_retries = max_retries
+        self.auto_solve_captcha = auto_solve_captcha
 
         # MCP session (initialized during run)
         self._mcp_session: ClientSession | None = None
+
+        # Initialize CAPTCHA solver if available
+        self._captcha_solver: CaptchaSolver | None = None
+        if CAPTCHA_SOLVER_AVAILABLE and auto_solve_captcha:
+            captcha_key = captcha_api_key or os.getenv("TWOCAPTCHA_API_KEY")
+            if captcha_key:
+                self._captcha_solver = CaptchaSolver(api_key=captcha_key)
+                logger.info("CAPTCHA solver initialized")
+            else:
+                logger.warning("No 2captcha API key - CAPTCHA auto-solve disabled")
 
     @property
     def name(self) -> str:
@@ -207,14 +248,45 @@ Always be thorough but cautious - don't submit until all required fields are fil
                     steps_completed.append("page_analyzed")
 
                     # Check for blockers
+                    captcha_info = None
                     blocker = await self._check_blockers(snapshot, analysis)
-                    if blocker and not blocker.can_auto_resolve:
-                        return OrchestratorOutput(
-                            success=False,
-                            status="needs_intervention",
-                            blocker=blocker,
-                            steps_completed=steps_completed,
-                        )
+
+                    if blocker:
+                        # Try to auto-resolve CAPTCHA
+                        if blocker.blocker_type == "captcha" and self._captcha_solver:
+                            steps_completed.append("captcha_detected")
+                            logger.info(f"Attempting to solve {blocker.captcha_subtype} CAPTCHA")
+
+                            captcha_result = await self._solve_captcha(
+                                snapshot, input_data.job_url
+                            )
+                            captcha_info = CaptchaSolveInfo(
+                                attempted=True,
+                                success=captcha_result.get("success", False),
+                                captcha_type=captcha_result.get("captcha_type"),
+                                solve_time_seconds=captcha_result.get("solve_time", 0),
+                                cost_usd=captcha_result.get("cost", 0),
+                                error=captcha_result.get("error"),
+                            )
+
+                            if captcha_result.get("success"):
+                                blocker.auto_resolved = True
+                                steps_completed.append("captcha_solved")
+                                # Wait for page to process token
+                                await asyncio.sleep(2)
+                                snapshot = await self._take_snapshot()
+                            else:
+                                blocker.resolution_error = captcha_result.get("error")
+
+                        # If blocker not resolved, return for manual intervention
+                        if not blocker.auto_resolved and not blocker.can_auto_resolve:
+                            return OrchestratorOutput(
+                                success=False,
+                                status="needs_intervention",
+                                blocker=blocker,
+                                captcha_info=captcha_info,
+                                steps_completed=steps_completed,
+                            )
 
                     # Step 3: If on job listing, click apply button
                     if "job_listing" in analysis.lower():
@@ -250,6 +322,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
                         success=True,
                         status="paused",  # Always pause before submit for review
                         fields_filled=fields_filled,
+                        captcha_info=captcha_info,
                         final_url=final_url,
                         screenshot_path=screenshot_path,
                         steps_completed=steps_completed,
@@ -349,6 +422,7 @@ Snapshot (first 3000 chars):
         blocker_check_prompt = f"""Analyze this page for blockers:
 
 1. CAPTCHA: Look for "captcha", "cf-turnstile", "hcaptcha", "recaptcha"
+   - If found, also identify subtype: "turnstile", "hcaptcha", or "recaptcha"
 2. Login Required: Look for "sign in", "log in", "login required"
 3. Error: Look for error messages
 
@@ -357,7 +431,7 @@ Page analysis: {analysis}
 Snapshot (first 2000 chars):
 {snapshot[:2000]}
 
-If a blocker is found, return JSON: {{"type": "...", "description": "..."}}
+If a blocker is found, return JSON: {{"type": "...", "subtype": "...", "description": "..."}}
 If no blocker, return: {{"type": "none"}}
 """
         response = self.client.models.generate_content(
@@ -375,15 +449,78 @@ If no blocker, return: {{"type": "none"}}
             result = json.loads(result_text)
 
             if result.get("type") and result["type"] != "none":
+                captcha_subtype = result.get("subtype")
+                can_auto = (
+                    result["type"] == "captcha"
+                    and self._captcha_solver is not None
+                )
                 return BlockerDetected(
                     blocker_type=result["type"],
+                    captcha_subtype=captcha_subtype,
                     description=result.get("description", ""),
-                    can_auto_resolve=result["type"] == "captcha",  # Could use 2captcha
+                    can_auto_resolve=can_auto,
                 )
         except Exception:
             pass
 
         return None
+
+    async def _solve_captcha(self, snapshot: str, page_url: str) -> dict:
+        """
+        Attempt to solve a CAPTCHA using 2captcha.
+
+        Returns:
+            Dict with success, captcha_type, token, solve_time, cost, error
+        """
+        if not self._captcha_solver:
+            return {"success": False, "error": "CAPTCHA solver not configured"}
+
+        try:
+            # Get page HTML for sitekey extraction
+            # The snapshot is accessibility tree, we need actual HTML
+            page_content = await self._mcp_session.call_tool(
+                "evaluate_script",
+                {"expression": "document.documentElement.outerHTML"}
+            )
+            page_html = str(page_content)
+
+            # Solve using the solver's auto-detection
+            result = await self._captcha_solver.solve_from_html(
+                page_html=page_html,
+                page_url=page_url,
+            )
+
+            if result.success and result.token:
+                # Inject the token into the page
+                captcha_type = result.captcha_type
+                if captcha_type and CAPTCHA_SOLVER_AVAILABLE:
+                    injection_script = self._captcha_solver.get_injection_script(
+                        captcha_type, result.token
+                    )
+                    await self._mcp_session.call_tool(
+                        "evaluate_script",
+                        {"expression": injection_script}
+                    )
+                    logger.info(f"Injected {captcha_type.value} token into page")
+
+                return {
+                    "success": True,
+                    "captcha_type": result.captcha_type.value if result.captcha_type else None,
+                    "token": result.token,
+                    "solve_time": result.solve_time_seconds,
+                    "cost": result.cost_usd,
+                }
+            else:
+                return {
+                    "success": False,
+                    "captcha_type": result.captcha_type.value if result.captcha_type else None,
+                    "error": result.error,
+                    "solve_time": result.solve_time_seconds,
+                }
+
+        except Exception as e:
+            logger.error(f"CAPTCHA solve error: {e}")
+            return {"success": False, "error": str(e)}
 
     async def _click_apply_button(self, snapshot: str) -> bool:
         """Find and click the Apply button."""

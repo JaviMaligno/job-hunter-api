@@ -3566,6 +3566,22 @@ files = [
 ]
 
 [[package]]
+name = "twocaptcha-python"
+version = "0.0.4"
+description = "Python client for 2captcha solving service - Bypass reCAPTCHA, Cloudflare Turnstile, FunCaptcha, GeeTest and solve any other captchas"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "twocaptcha_python-0.0.4-py3-none-any.whl", hash = "sha256:f43098e4dafeb6c931a3be0217acace42aee57ce7b8e44f1214972fb4be3c65d"},
+    {file = "twocaptcha_python-0.0.4.tar.gz", hash = "sha256:94fd3e2390d7441ad61671005f66f2a93ca971e3b8e3335a8a7970a28f00362c"},
+]
+
+[package.dependencies]
+httpx = ">=0.28.1"
+rich = ">=14.2.0"
+
+[[package]]
 name = "typer"
 version = "0.12.5"
 description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
@@ -4221,4 +4237,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "a5083574d2d3960458d4b7b25a84e66e5d2d042101c83371dbe763f0555f0dc0"
+content-hash = "f69439b1fc10c62675cb02bce40cff7144a18e7018d61b1d603d563796f0c408"
