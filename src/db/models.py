@@ -82,8 +82,10 @@ class ApplicationStatus(str, enum.Enum):
 
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
+    PAUSED = "paused"
     SUBMITTED = "submitted"
     FAILED = "failed"
+    CANCELLED = "cancelled"
     NEEDS_INTERVENTION = "needs_intervention"
 
 

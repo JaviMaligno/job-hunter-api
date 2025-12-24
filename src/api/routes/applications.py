@@ -131,7 +131,9 @@ async def start_application(
         )
 
         # Run form filler agent
-        agent = FormFillerAgent(claude_api_key=claude.api_key)
+        # Get API key if available (Anthropic has api_key, AnthropicBedrock doesn't)
+        api_key = getattr(claude, "api_key", None)
+        agent = FormFillerAgent(claude_api_key=api_key)
         result: FormFillerOutput = await agent.run(filler_input)
 
         # Update session with result
