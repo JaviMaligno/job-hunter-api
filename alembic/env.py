@@ -1,5 +1,12 @@
 """Alembic environment configuration."""
 
+import sys
+from pathlib import Path
+
+# Add project root to path so 'src' module can be found
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from logging.config import fileConfig
 
 from alembic import context
