@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from src.agents.base import BaseAgent
 from src.automation.models import UserFormData  # Shared model to avoid circular import
 from src.browser_service.models import BrowserMode, FormField
+from src.config import settings
 from src.db.models import ApplicationMode, ApplicationStatus, BlockerType
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ class FormFillerInput(BaseModel):
     mode: ApplicationMode = ApplicationMode.ASSISTED
     ats_type: str | None = None  # Auto-detected if None
     headless: bool = True
-    browser_mode: BrowserMode = BrowserMode.PLAYWRIGHT
+    browser_mode: BrowserMode | None = None  # Defaults to settings.default_browser_mode
     devtools_url: str | None = None  # Required for chrome-devtools mode
 
 
@@ -200,13 +201,31 @@ Always respond with valid JSON matching the requested schema."""
             self._browser_client = BrowserServiceClient()
 
         try:
-            async with self._browser_client:
-                return await self._fill_form(input_data)
+            # Don't use context manager - we need to keep session open for interventions
+            await self._browser_client.__aenter__()
+            result = await self._fill_form(input_data)
+
+            # Only close browser session if NOT needing intervention
+            # (user needs browser open to solve CAPTCHA, login, etc.)
+            if result.status != ApplicationStatus.NEEDS_INTERVENTION:
+                await self._browser_client.__aexit__(None, None, None)
+            else:
+                logger.info(f"Keeping browser session open for intervention (session_id={result.browser_session_id})")
+
+            return result
         except Exception as e:
-            logger.error(f"Form filling failed: {e}")
+            import traceback
+            error_msg = str(e) or f"{type(e).__name__}: {repr(e)}"
+            logger.error(f"Form filling failed: {error_msg}")
+            logger.error(f"Exception traceback:\n{traceback.format_exc()}")
+            # Close browser on error
+            try:
+                await self._browser_client.__aexit__(None, None, None)
+            except Exception:
+                pass
             return FormFillerOutput(
                 status=ApplicationStatus.FAILED,
-                error_message=str(e),
+                error_message=error_msg,
             )
 
     async def _fill_form(self, input_data: FormFillerInput) -> FormFillerOutput:
@@ -221,10 +240,13 @@ Always respond with valid JSON matching the requested schema."""
         client = self._browser_client
         assert client is not None
 
-        # Create browser session
-        logger.info(f"Creating browser session for {input_data.application_url} (mode={input_data.browser_mode.value})")
+        # Create browser session - use settings default if not specified
+        effective_mode = input_data.browser_mode
+        if effective_mode is None:
+            effective_mode = BrowserMode.CHROME_DEVTOOLS if settings.default_browser_mode == "chrome-devtools" else BrowserMode.PLAYWRIGHT
+        logger.info(f"Creating browser session for {input_data.application_url} (mode={effective_mode.value})")
         session = await client.create_session(
-            mode=input_data.browser_mode,
+            mode=effective_mode,
             headless=input_data.headless,
             devtools_url=input_data.devtools_url,
         )

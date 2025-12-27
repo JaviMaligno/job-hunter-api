@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.form_filler import FormFillerAgent, FormFillerInput, FormFillerOutput
 from src.browser_service.models import BrowserMode
+from src.config import settings
 from src.api.dependencies import ClaudeDep
 from src.api.websocket_manager import get_connection_manager, WebSocketMessage
 from src.automation.models import UserFormData
@@ -512,7 +513,7 @@ class StartApplicationV2Request(BaseModel):
     agent: AgentType = AgentType.GEMINI  # Which agent to use
     auto_solve_captcha: bool = True  # Auto-solve CAPTCHAs if possible
     gemini_model: str | None = None  # Optional: override Gemini model
-    browser_mode: str = "playwright"  # Browser mode: playwright or chrome-devtools
+    browser_mode: str | None = None  # Browser mode: chrome-devtools or playwright (defaults to config)
     devtools_url: str | None = None  # Chrome DevTools URL for chrome-devtools mode
 
 
@@ -551,6 +552,7 @@ class ResolveInterventionRequest(BaseModel):
     """Request to resolve an intervention."""
     action: str  # continue, submit, cancel, retry
     notes: str | None = None
+    close_browser: bool = True  # Whether to close the browser session
 
 
 class SessionSummary(BaseModel):
@@ -678,8 +680,9 @@ async def start_application_v2(
 
         if request.agent == AgentType.CLAUDE or use_claude_fallback:
             # Claude FormFillerAgent
-            # Parse browser mode from request
-            browser_mode = BrowserMode.CHROME_DEVTOOLS if request.browser_mode == "chrome-devtools" else BrowserMode.PLAYWRIGHT
+            # Parse browser mode from request, defaulting to config
+            effective_browser_mode = request.browser_mode or settings.default_browser_mode
+            browser_mode = BrowserMode.CHROME_DEVTOOLS if effective_browser_mode == "chrome-devtools" else BrowserMode.PLAYWRIGHT
 
             filler_input = FormFillerInput(
                 application_url=request.job_url,
@@ -746,6 +749,11 @@ async def start_application_v2(
         session.fields_filled = {f.field_name: f.value for f in result.fields_filled}
         session.updated_at = datetime.utcnow()
 
+        # Save browser session ID from Claude agent
+        if request.agent == AgentType.CLAUDE or use_claude_fallback:
+            if claude_result and claude_result.browser_session_id:
+                session.browser_session_id = claude_result.browser_session_id
+
         if result.blocker:
             session.blocker_type = BlockerType.CAPTCHA if result.blocker.blocker_type == "captcha" else BlockerType.NONE
             session.blocker_message = result.blocker.description
@@ -758,6 +766,9 @@ async def start_application_v2(
         persistent_session.steps_completed = result.steps_completed
         persistent_session.fields_filled = {f.field_name: f.value for f in result.fields_filled}
         persistent_session.current_url = result.final_url
+        # Save browser session ID for later cleanup
+        if session.browser_session_id:
+            persistent_session.browser_session_id = session.browser_session_id
         if result.blocker:
             persistent_session.blocker_type = session.blocker_type
             persistent_session.blocker_message = session.blocker_message
@@ -905,6 +916,12 @@ async def resolve_intervention(
         raise HTTPException(status_code=501, detail="Gemini orchestrator not available")
 
     intervention_manager = get_intervention_manager()
+
+    # Get intervention to find session_id for browser cleanup
+    intervention = intervention_manager.get_intervention(intervention_id)
+    if not intervention:
+        raise HTTPException(status_code=404, detail="Intervention not found")
+
     success = await intervention_manager.resolve(
         intervention_id=intervention_id,
         action=request.action,
@@ -912,9 +929,33 @@ async def resolve_intervention(
     )
 
     if not success:
-        raise HTTPException(status_code=404, detail="Intervention not found")
+        raise HTTPException(status_code=404, detail="Failed to resolve intervention")
 
-    return {"status": "resolved", "intervention_id": intervention_id, "action": request.action}
+    # Close browser session if requested and action is "continue" (Done)
+    browser_closed = False
+    logger.info(f"Resolve intervention: action={request.action}, close_browser={request.close_browser}")
+    if request.close_browser and request.action == "continue":
+        session_store = get_session_store()
+        session = await session_store.load(intervention.session_id)
+        logger.info(f"Session loaded: {session.session_id if session else 'None'}, browser_session_id={session.browser_session_id if session else 'N/A'}")
+        if session and session.browser_session_id:
+            try:
+                from src.automation.client import BrowserServiceClient
+                async with BrowserServiceClient() as client:
+                    await client.close_session_by_id(session.browser_session_id)
+                browser_closed = True
+                logger.info(f"Closed browser session {session.browser_session_id} for intervention {intervention_id}")
+            except Exception as e:
+                logger.warning(f"Failed to close browser session: {e}")
+        else:
+            logger.warning(f"No browser_session_id found for session {intervention.session_id}")
+
+    return {
+        "status": "resolved",
+        "intervention_id": intervention_id,
+        "action": request.action,
+        "browser_closed": browser_closed,
+    }
 
 
 @router.get("/v2/sessions", response_model=list[SessionSummary])
@@ -1057,25 +1098,99 @@ async def resume_v2_session(
     async def run_resume_task():
         nonlocal session
         try:
-            # Create orchestrator input for resume
-            orchestrator_input = OrchestratorInput(
-                job_url=session.current_url or session.job_url,
-                user_data=user_data,
-                cv_content=session.cv_content or "",
-                cv_file_path=session.cv_file_path,
-                cover_letter=session.cover_letter,
-                headless=False,
-                # Session info for intervention management
-                session_id=session_id,
-                user_id=session.user_id,
-                wait_for_intervention=True,
-            )
+            result = None
+            use_claude_fallback = False
+            agent_used = "gemini"
 
-            # Run orchestrator
-            agent = GeminiOrchestratorAgent(
-                auto_solve_captcha=request.auto_solve_captcha
-            )
-            result: OrchestratorOutput = await agent.run(orchestrator_input)
+            # First try Gemini
+            try:
+                # Create orchestrator input for resume
+                orchestrator_input = OrchestratorInput(
+                    job_url=session.current_url or session.job_url,
+                    user_data=user_data,
+                    cv_content=session.cv_content or "",
+                    cv_file_path=session.cv_file_path,
+                    cover_letter=session.cover_letter,
+                    headless=False,
+                    # Session info for intervention management
+                    session_id=session_id,
+                    user_id=session.user_id,
+                    wait_for_intervention=True,
+                )
+
+                # Run orchestrator
+                agent = GeminiOrchestratorAgent(
+                    auto_solve_captcha=request.auto_solve_captcha
+                )
+                result = await agent.run(orchestrator_input)
+            except Exception as gemini_error:
+                logger.warning(f"Gemini agent failed during resume: {gemini_error}")
+                use_claude_fallback = True
+
+            # Fallback to Claude if Gemini failed
+            if use_claude_fallback:
+                logger.info("Falling back to Claude FormFillerAgent for resume")
+                agent_used = "claude_fallback"
+
+                # Convert user data for Claude agent
+                claude_user_data = UserFormData(
+                    first_name=user_data.first_name,
+                    last_name=user_data.last_name,
+                    email=user_data.email,
+                    phone=user_data.phone if hasattr(user_data, 'phone') else "",
+                )
+
+                filler_input = FormFillerInput(
+                    application_url=session.current_url or session.job_url,
+                    user_data=claude_user_data,
+                    cv_content=session.cv_content or "",
+                    cv_file_path=session.cv_file_path,
+                    cover_letter=session.cover_letter,
+                    mode=session.mode,
+                    headless=False,
+                    browser_mode=BrowserMode.CHROME_DEVTOOLS,
+                )
+
+                api_key = getattr(claude, "api_key", None)
+                claude_agent = FormFillerAgent(claude_api_key=api_key)
+                claude_result: FormFillerOutput = await claude_agent.run(filler_input)
+
+                # Convert Claude result to OrchestratorOutput format
+                from src.agents.gemini_orchestrator import FieldFilled, BlockerDetected
+
+                blocker = None
+                if claude_result.blocker_detected:
+                    blocker_type_map = {
+                        BlockerType.CAPTCHA: "captcha",
+                        BlockerType.LOGIN_REQUIRED: "login_required",
+                        BlockerType.FILE_UPLOAD: "file_upload",
+                    }
+                    blocker = BlockerDetected(
+                        blocker_type=blocker_type_map.get(claude_result.blocker_detected, "other"),
+                        description=claude_result.blocker_details or "Blocker detected",
+                        screenshot_path=claude_result.screenshot_path,
+                        captcha_subtype="recaptcha" if claude_result.blocker_detected == BlockerType.CAPTCHA else None,
+                    )
+
+                result = OrchestratorOutput(
+                    success=claude_result.status == ApplicationStatus.SUBMITTED,
+                    status=(
+                        "completed" if claude_result.status == ApplicationStatus.SUBMITTED
+                        else "paused" if claude_result.status == ApplicationStatus.PAUSED
+                        else "needs_intervention" if claude_result.status == ApplicationStatus.NEEDS_INTERVENTION
+                        else "failed" if claude_result.status == ApplicationStatus.FAILED
+                        else "in_progress"
+                    ),
+                    steps_completed=[f"Step {i}" for i in range(1, claude_result.current_step + 1)],
+                    fields_filled=[
+                        FieldFilled(field_name=k, value=v, field_type="text")
+                        for k, v in claude_result.fields_filled.items()
+                    ],
+                    blocker=blocker,
+                    final_url=claude_result.page_url or session.job_url,
+                    screenshot_path=claude_result.screenshot_path,
+                    error_message=claude_result.error_message,
+                )
 
             # Update session with result
             session = await session_store.load(session_id)  # Reload fresh

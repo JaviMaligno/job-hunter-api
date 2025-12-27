@@ -137,6 +137,15 @@ class BrowserServiceClient:
         logger.info(f"Closed browser session: {self._session_id}")
         self._session_id = None
 
+    async def close_session_by_id(self, session_id: str) -> None:
+        """Close a browser session by its ID.
+
+        This is useful for closing sessions that were created elsewhere.
+        """
+        response = await self.client.delete(f"/sessions/{session_id}")
+        response.raise_for_status()
+        logger.info(f"Closed browser session: {session_id}")
+
     async def get_session(self) -> BrowserSession:
         """Get current session details."""
         response = await self.client.get(f"/sessions/{self.session_id}")
@@ -165,9 +174,11 @@ class BrowserServiceClient:
         """
         request = NavigateRequest(url=url, wait_until=wait_until, timeout=timeout)
 
+        # Use extended timeout for navigation (can take longer than other operations)
         response = await self.client.post(
             f"/sessions/{self.session_id}/navigate",
             json=request.model_dump(),
+            timeout=60.0,  # 60 second timeout for navigation
         )
         response.raise_for_status()
 
