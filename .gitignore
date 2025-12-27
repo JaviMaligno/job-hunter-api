@@ -87,3 +87,5 @@ credentials.json
 token.json
 *_token.json
 gmail_credentials.json
+.claude/settings.local.json
+.claude/
