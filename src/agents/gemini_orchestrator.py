@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from google import genai
+from google.genai import errors as genai_errors
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -220,6 +221,109 @@ Always be thorough but cautious - don't submit until all required fields are fil
                 logger.info("CAPTCHA solver initialized")
             else:
                 logger.warning("No 2captcha API key - CAPTCHA auto-solve disabled")
+
+
+    def _generate_with_retry(
+        self,
+        contents: str,
+        model: str | None = None,
+        max_retries: int | None = None,
+    ) -> Any:
+        """
+        Generate content with retry logic and model fallback.
+
+        Args:
+            contents: The prompt/contents to send
+            model: Model to use (defaults to self.model)
+            max_retries: Max retries per model (defaults to self.max_retries)
+
+        Returns:
+            The API response
+
+        Raises:
+            Exception: If all retries and fallbacks fail
+        """
+        current_model = model or self.model
+        retries = max_retries or self.max_retries
+        models_to_try = [current_model]
+
+        # Add fallback model if not already in list
+        if current_model == self.MODEL_PRIMARY and self.MODEL_FALLBACK not in models_to_try:
+            models_to_try.append(self.MODEL_FALLBACK)
+        elif current_model == self.MODEL_FALLBACK and self.MODEL_PRIMARY not in models_to_try:
+            models_to_try.append(self.MODEL_PRIMARY)
+
+        last_error = None
+
+        for model_name in models_to_try:
+            for attempt in range(retries):
+                try:
+                    response = self.client.models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                    )
+                    if attempt > 0 or model_name != current_model:
+                        logger.info(f"Gemini call succeeded with {model_name} on attempt {attempt + 1}")
+                    return response
+
+                except genai_errors.ClientError as e:
+                    error_str = str(e).lower()
+                    last_error = e
+
+                    # Check for rate limit (429)
+                    if "429" in str(e) or "resource exhausted" in error_str or "too many requests" in error_str:
+                        wait_time = min(2 ** attempt * 2, 30)  # Exponential backoff, max 30s
+                        logger.warning(
+                            f"Rate limited on {model_name} (attempt {attempt + 1}/{retries}), "
+                            f"waiting {wait_time}s before retry"
+                        )
+                        import time
+                        time.sleep(wait_time)
+                        continue
+
+                    # Other client errors - don't retry
+                    logger.error(f"Gemini ClientError on {model_name}: {e}")
+                    raise
+
+                except genai_errors.ServerError as e:
+                    last_error = e
+                    wait_time = min(2 ** attempt * 2, 30)
+                    logger.warning(
+                        f"Server error on {model_name} (attempt {attempt + 1}/{retries}), "
+                        f"waiting {wait_time}s before retry: {e}"
+                    )
+                    import time
+                    time.sleep(wait_time)
+                    continue
+
+                except Exception as e:
+                    last_error = e
+                    # Check if it's a rate limit error in exception message
+                    error_str = str(e).lower()
+                    if "429" in str(e) or "resource exhausted" in error_str or "too many requests" in error_str:
+                        wait_time = min(2 ** attempt * 2, 30)
+                        logger.warning(
+                            f"Rate limited on {model_name} (attempt {attempt + 1}/{retries}), "
+                            f"waiting {wait_time}s before retry"
+                        )
+                        import time
+                        time.sleep(wait_time)
+                        continue
+
+                    # Unknown error - log and retry
+                    logger.warning(f"Unexpected error on {model_name} (attempt {attempt + 1}/{retries}): {e}")
+                    if attempt < retries - 1:
+                        import time
+                        time.sleep(2)
+                        continue
+                    break
+
+            # All retries exhausted for this model, try next
+            logger.warning(f"All retries exhausted for {model_name}, trying fallback model")
+
+        # All models and retries exhausted
+        logger.error(f"All Gemini models failed after retries: {last_error}")
+        raise last_error or Exception("All Gemini models failed")
 
     @property
     def name(self) -> str:
@@ -510,10 +614,7 @@ Return one of: "job_listing", "application_form", "login_required", "error_page"
 Snapshot (first 3000 chars):
 {snapshot[:3000]}
 """
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-        )
+        response = self._generate_with_retry(contents=prompt)
         return response.text.strip().lower()
 
     async def _check_blockers(
@@ -535,10 +636,7 @@ Snapshot (first 2000 chars):
 If a blocker is found, return JSON: {{"type": "...", "subtype": "...", "description": "..."}}
 If no blocker, return: {{"type": "none"}}
 """
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=blocker_check_prompt,
-        )
+        response = self._generate_with_retry(contents=blocker_check_prompt)
 
         try:
             result_text = response.text.strip()
@@ -632,10 +730,7 @@ If not found, return "NOT_FOUND".
 Snapshot (first 4000 chars):
 {snapshot[:4000]}
 """
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-        )
+        response = self._generate_with_retry(contents=prompt)
         uid = response.text.strip()
 
         if uid and "_" in uid and "NOT_FOUND" not in uid:
@@ -667,10 +762,7 @@ Only include fields you can confidently match. Return [] if no form fields found
 Snapshot:
 {snapshot[:5000]}
 """
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-        )
+        response = self._generate_with_retry(contents=prompt)
 
         try:
             result_text = response.text.strip()
@@ -711,10 +803,7 @@ Return ONLY the uid value, or "NOT_FOUND" if not present.
 Snapshot (first 3000 chars):
 {snapshot[:3000]}
 """
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-        )
+        response = self._generate_with_retry(contents=prompt)
         uid = response.text.strip()
 
         if uid and "_" in uid and "NOT_FOUND" not in uid:
