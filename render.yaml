@@ -3,7 +3,7 @@ services:
     name: job-hunter-api
     runtime: python
     region: frankfurt
-    plan: starter
+    plan: free
     buildCommand: pip install poetry && poetry install --no-root
     startCommand: poetry run uvicorn src.main:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -17,17 +17,37 @@ services:
         value: "3.11.9"
       - key: POETRY_VERSION
         value: "1.8.0"
+      # Database - set manually from Render dashboard using internal connection string
       - key: DATABASE_URL
         sync: false
+      # JWT - auto-generated
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # Frontend URL for CORS and redirects
+      - key: FRONTEND_URL
+        value: https://job-hunter-dashboard.onrender.com
+      # OAuth redirect URIs
+      - key: GOOGLE_REDIRECT_URI
+        value: https://job-hunter-api-kdyd.onrender.com/api/auth/google/callback
+      - key: GMAIL_REDIRECT_URI
+        value: https://job-hunter-api-kdyd.onrender.com/api/gmail/callback
+      # AWS Bedrock for Claude AI
       - key: BEDROCK_ENABLED
         value: "true"
       - key: BEDROCK_REGION
         value: eu-west-2
       - key: BEDROCK_MODEL_ID
         value: eu.anthropic.claude-sonnet-4-5-20250929-v1:0
+      # Secrets - set manually in Render dashboard
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
         sync: false
     healthCheckPath: /health
     autoDeploy: true

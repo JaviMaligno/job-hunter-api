@@ -3,7 +3,7 @@
 from enum import Enum
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,16 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/job_hunter.db"
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def transform_database_url(cls, v: str) -> str:
+        """Transform Render's postgres:// URL to postgresql+asyncpg:// for SQLAlchemy async."""
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://") and "+asyncpg" not in v:
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # Anthropic Claude SDK
     anthropic_api_key: str | None = None
