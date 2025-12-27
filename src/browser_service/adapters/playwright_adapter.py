@@ -124,11 +124,20 @@ class PlaywrightAdapter(BrowserAdapter):
 
             duration = int((time.time() - start) * 1000)
 
+            # Check if navigation was successful
+            is_success = response is not None and response.ok
+            error_msg = None
+            if response is None:
+                error_msg = "Navigation returned no response"
+            elif not response.ok:
+                error_msg = f"HTTP {response.status}: {response.status_text}"
+
             return NavigateResponse(
-                success=response is not None and response.ok,
+                success=is_success,
                 duration_ms=duration,
                 url=self.page.url,
                 page_title=await self.page.title(),
+                error=error_msg,
             )
         except Exception as e:
             duration = int((time.time() - start) * 1000)

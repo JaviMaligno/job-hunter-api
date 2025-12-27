@@ -83,8 +83,17 @@ class ChromeDevToolsAdapter(BrowserAdapter):
 
         self._default_timeout = config.timeout
 
+        # Parse port from devtools_url if provided (e.g., "http://localhost:9222")
+        port = None
+        if config.devtools_url:
+            import re
+            port_match = re.search(r':(\d+)/?$', config.devtools_url)
+            if port_match:
+                port = int(port_match.group(1))
+            logger.info(f"Using Chrome DevTools at port {port} (from {config.devtools_url})")
+
         # Create and connect MCP client
-        self._mcp_client = ChromeDevToolsMCP()
+        self._mcp_client = ChromeDevToolsMCP(port=port)
         await self._mcp_client.__aenter__()
 
         # List available tools for debugging
@@ -96,8 +105,14 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         logger.info("Closing Chrome DevTools MCP adapter")
 
         if self._mcp_client:
-            await self._mcp_client.__aexit__(None, None, None)
-            self._mcp_client = None
+            try:
+                await self._mcp_client.__aexit__(None, None, None)
+            except RuntimeError as e:
+                # Handle "cancel scope in different task" error from anyio
+                # This happens when close() is called from a different task than initialize()
+                logger.warning(f"MCP client close warning (safe to ignore): {e}")
+            finally:
+                self._mcp_client = None
 
         logger.info("Chrome DevTools MCP adapter closed")
 
@@ -112,8 +127,28 @@ class ChromeDevToolsAdapter(BrowserAdapter):
             List of element dicts with uid, role, name
         """
         result = await self.mcp.take_snapshot()
-        self._cached_snapshot = result.get("text", "")
+        logger.debug(f"Snapshot raw result type: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'N/A'}")
+
+        # Handle different result structures from MCP
+        if isinstance(result, dict):
+            # Try 'text' first, then 'content', then stringify
+            if "text" in result:
+                self._cached_snapshot = result["text"]
+            elif "content" in result:
+                content = result["content"]
+                if isinstance(content, list) and len(content) > 0:
+                    first = content[0]
+                    self._cached_snapshot = getattr(first, 'text', str(first))
+                else:
+                    self._cached_snapshot = str(content)
+            else:
+                self._cached_snapshot = str(result)
+        else:
+            self._cached_snapshot = str(result) if result else ""
+
+        logger.debug(f"Snapshot content length: {len(self._cached_snapshot)}, first 500 chars: {self._cached_snapshot[:500]}")
         self._cached_elements = self._parse_snapshot(self._cached_snapshot)
+        logger.info(f"Parsed {len(self._cached_elements)} elements from snapshot")
         return self._cached_elements
 
     def _parse_snapshot(self, snapshot_text: str) -> list[dict]:
@@ -525,6 +560,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         try:
             # Refresh snapshot
             await self._refresh_snapshot()
+            logger.info(f"DOM snapshot: {len(self._cached_elements)} elements parsed")
 
             # Map accessibility elements to FormField
             form_fields = []
@@ -533,19 +569,31 @@ class ChromeDevToolsAdapter(BrowserAdapter):
                 name = el.get("name", "")
                 uid = el.get("uid", "")
 
-                # Filter to form-like elements
-                if role.lower() in ("textbox", "combobox", "checkbox", "radio", "button", "searchbox"):
+                # Filter to form-like elements (expanded list for better form detection)
+                form_roles = (
+                    "textbox", "combobox", "checkbox", "radio", "button", "searchbox",
+                    "listbox", "spinbutton", "option", "slider", "switch", "menuitemcheckbox",
+                    "menuitemradio", "searchbox", "textarea"
+                )
+                if role.lower() in form_roles:
                     field_type = "text"
-                    if role.lower() == "combobox":
+                    role_lower = role.lower()
+                    if role_lower in ("combobox", "listbox"):
                         field_type = "select"
-                    elif role.lower() == "checkbox":
+                    elif role_lower == "checkbox":
                         field_type = "checkbox"
-                    elif role.lower() == "radio":
+                    elif role_lower in ("radio", "menuitemradio"):
                         field_type = "radio"
-                    elif role.lower() == "button":
+                    elif role_lower == "button":
                         field_type = "submit"
-                    elif role.lower() == "searchbox":
+                    elif role_lower == "searchbox":
                         field_type = "search"
+                    elif role_lower in ("spinbutton", "slider"):
+                        field_type = "number"
+                    elif role_lower == "switch":
+                        field_type = "checkbox"
+                    elif role_lower == "textarea":
+                        field_type = "textarea"
 
                     form_fields.append(FormField(
                         selector=f"[uid={uid}]",  # Use UID as selector
@@ -562,6 +610,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
                         is_enabled=True,
                     ))
 
+            logger.info(f"DOM found {len(form_fields)} form fields")
             return DOMResponse(
                 success=True,
                 page_url=self._current_url or await self.mcp.get_current_url(),

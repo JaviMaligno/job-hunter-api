@@ -1,13 +1,15 @@
 """User-related API routes."""
 
 import io
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm.attributes import flag_modified
 
-from src.api.dependencies import DbDep
+from src.api.dependencies import ClaudeDep, DbDep
+from src.integrations.claude.client import get_model_id
 from src.api.schemas import (
     EmailSender,
     EmailSenderPreferences,
@@ -19,6 +21,8 @@ from src.api.schemas import (
 )
 from src.config import DEFAULT_JOB_EMAIL_SENDERS
 from src.db.repositories.user import UserRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -44,6 +48,49 @@ class CVResponse(BaseModel):
     text_length: int
     preview: str | None = None
     content: str | None = None
+
+
+# ============================================================================
+# AI Response Generation Schemas
+# ============================================================================
+
+
+class QuestionAnswerRequest(BaseModel):
+    """Request to generate an answer for a job application question."""
+
+    question: str = Field(..., description="The question to answer")
+    job_title: str | None = Field(None, description="Job title for context")
+    company: str | None = Field(None, description="Company name for context")
+    job_description: str | None = Field(None, description="Job description for context")
+    max_words: int = Field(300, description="Target word count for answer")
+    tone: str = Field("professional", description="Tone: professional, enthusiastic, conversational")
+    save_answer: bool = Field(False, description="Save this answer for future use")
+
+
+class QuestionAnswerResponse(BaseModel):
+    """Response with generated answer."""
+
+    question: str
+    answer: str
+    word_count: int
+    from_cache: bool = False  # If retrieved from saved answers
+    saved: bool = False  # If answer was saved
+
+
+class SavedAnswer(BaseModel):
+    """A saved answer for a common question."""
+
+    question_pattern: str  # Pattern to match similar questions
+    answer: str
+    used_count: int = 0
+    last_used: str | None = None
+
+
+class SavedAnswersResponse(BaseModel):
+    """Response with all saved answers."""
+
+    answers: list[SavedAnswer]
+    total: int
 
 
 # ============================================================================
@@ -420,3 +467,211 @@ async def update_email_sender_preferences(
 
     # Return updated state
     return await get_email_sender_preferences(user_id, db)
+
+
+# ============================================================================
+# AI Response Generation Endpoints
+# ============================================================================
+
+
+ANSWER_GENERATION_PROMPT = """You are helping a job applicant write personalized responses for job application questions.
+
+## Applicant's CV/Resume:
+{cv_content}
+
+## Job Context:
+- Position: {job_title}
+- Company: {company}
+- Job Description: {job_description}
+
+## Question to Answer:
+{question}
+
+## Instructions:
+1. Write a {tone} response that highlights relevant experience from the CV
+2. Target approximately {max_words} words
+3. Be specific and use concrete examples from the CV when possible
+4. Tailor the response to the specific company and role
+5. Be authentic and avoid generic phrases
+6. If the question asks "why this company", research common reasons people want to work there
+7. Do NOT include any preamble or explanation - just write the answer directly
+
+Write the answer now:"""
+
+
+def _find_matching_saved_answer(
+    question: str,
+    saved_answers: list[dict],
+) -> dict | None:
+    """Find a saved answer that matches the question pattern."""
+    question_lower = question.lower()
+
+    for saved in saved_answers:
+        pattern = saved.get("question_pattern", "").lower()
+        # Simple pattern matching - check if key phrases match
+        if pattern and pattern in question_lower:
+            return saved
+
+    return None
+
+
+@router.post("/{user_id}/generate-answer", response_model=QuestionAnswerResponse)
+async def generate_answer(
+    user_id: UUID,
+    request: QuestionAnswerRequest,
+    db: DbDep,
+    claude: ClaudeDep,
+):
+    """
+    Generate an AI-powered answer for a job application question.
+
+    Uses the user's CV and job context to create personalized responses.
+    Optionally saves the answer for future use with similar questions.
+    """
+    repo = UserRepository(db)
+    user = await repo.get(user_id)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check for cached/saved answer first
+    prefs = user.preferences or {}
+    saved_answers = prefs.get("saved_answers", [])
+
+    matching = _find_matching_saved_answer(request.question, saved_answers)
+    if matching and not request.save_answer:  # Don't use cache if explicitly saving new
+        # Update usage stats
+        matching["used_count"] = matching.get("used_count", 0) + 1
+        matching["last_used"] = __import__("datetime").datetime.utcnow().isoformat()
+        user.preferences = prefs
+        flag_modified(user, "preferences")
+        await db.flush()
+
+        return QuestionAnswerResponse(
+            question=request.question,
+            answer=matching["answer"],
+            word_count=len(matching["answer"].split()),
+            from_cache=True,
+            saved=True,
+        )
+
+    # Get CV content
+    cv_content = user.base_cv_content
+    if not cv_content:
+        raise HTTPException(
+            status_code=400,
+            detail="No CV found. Please upload your CV first using POST /users/{user_id}/cv",
+        )
+
+    # Build prompt
+    prompt = ANSWER_GENERATION_PROMPT.format(
+        cv_content=cv_content[:4000],  # Limit CV length
+        job_title=request.job_title or "Not specified",
+        company=request.company or "Not specified",
+        job_description=(request.job_description or "Not provided")[:2000],
+        question=request.question,
+        tone=request.tone,
+        max_words=request.max_words,
+    )
+
+    # Generate with Claude
+    try:
+        response = claude.messages.create(
+            model=get_model_id(),
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        answer = response.content[0].text.strip()
+    except Exception as e:
+        logger.error(f"Claude API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate answer: {str(e)}",
+        )
+
+    word_count = len(answer.split())
+
+    # Save answer if requested
+    saved = False
+    if request.save_answer:
+        # Create a pattern from the question (simplified version)
+        # Remove specific company/job references to make it reusable
+        pattern = request.question.lower()
+        for word in [request.company, request.job_title]:
+            if word:
+                pattern = pattern.replace(word.lower(), "")
+        pattern = " ".join(pattern.split()[:10])  # First 10 words as pattern
+
+        new_saved = {
+            "question_pattern": pattern,
+            "answer": answer,
+            "used_count": 1,
+            "last_used": __import__("datetime").datetime.utcnow().isoformat(),
+            "original_question": request.question,
+        }
+
+        saved_answers.append(new_saved)
+        prefs["saved_answers"] = saved_answers
+        user.preferences = prefs
+        flag_modified(user, "preferences")
+        await db.flush()
+        saved = True
+
+    return QuestionAnswerResponse(
+        question=request.question,
+        answer=answer,
+        word_count=word_count,
+        from_cache=False,
+        saved=saved,
+    )
+
+
+@router.get("/{user_id}/saved-answers", response_model=SavedAnswersResponse)
+async def get_saved_answers(user_id: UUID, db: DbDep):
+    """Get all saved answers for a user."""
+    repo = UserRepository(db)
+    user = await repo.get(user_id)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    prefs = user.preferences or {}
+    saved = prefs.get("saved_answers", [])
+
+    answers = [
+        SavedAnswer(
+            question_pattern=s.get("question_pattern", ""),
+            answer=s.get("answer", ""),
+            used_count=s.get("used_count", 0),
+            last_used=s.get("last_used"),
+        )
+        for s in saved
+    ]
+
+    return SavedAnswersResponse(answers=answers, total=len(answers))
+
+
+@router.delete("/{user_id}/saved-answers/{pattern}")
+async def delete_saved_answer(user_id: UUID, pattern: str, db: DbDep):
+    """Delete a saved answer by its pattern."""
+    repo = UserRepository(db)
+    user = await repo.get(user_id)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    prefs = user.preferences or {}
+    saved = prefs.get("saved_answers", [])
+
+    # Filter out the matching pattern
+    new_saved = [s for s in saved if s.get("question_pattern") != pattern]
+
+    if len(new_saved) == len(saved):
+        raise HTTPException(status_code=404, detail="Saved answer not found")
+
+    prefs["saved_answers"] = new_saved
+    user.preferences = prefs
+    flag_modified(user, "preferences")
+    await db.flush()
+
+    return {"success": True, "message": "Saved answer deleted"}

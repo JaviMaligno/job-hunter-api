@@ -61,9 +61,18 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # CORS middleware
+# Note: For WebSocket connections, explicit origins are needed when allow_credentials=True
+_dev_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:8000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.is_development else ["https://job-hunter.vercel.app"],
+    allow_origins=_dev_origins if settings.is_development else ["https://job-hunter.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,12 +98,29 @@ async def health():
     }
 
 
+# Test WebSocket endpoint (for debugging 403 issue)
+from fastapi import WebSocket
+
+@app.websocket("/ws/test")
+async def websocket_test(websocket: WebSocket):
+    """Simple test WebSocket endpoint."""
+    await websocket.accept()
+    logger.info("Test WebSocket connected!")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Echo: {data}")
+    except Exception as e:
+        logger.info(f"Test WebSocket closed: {e}")
+
+
 # Import and include routers
-from src.api.routes import applications, auth, gmail, jobs, users
+from src.api.routes import applications, auth, gmail, jobs, linkedin, users
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
 app.include_router(gmail.router, prefix="/api/gmail", tags=["gmail"])
+app.include_router(linkedin.router, prefix="/api/linkedin", tags=["linkedin"])
 

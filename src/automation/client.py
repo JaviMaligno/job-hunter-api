@@ -93,6 +93,7 @@ class BrowserServiceClient:
         slow_mo: int = 0,
         viewport_width: int = 1280,
         viewport_height: int = 720,
+        devtools_url: str | None = None,
     ) -> SessionCreateResponse:
         """Create a new browser session.
 
@@ -102,6 +103,7 @@ class BrowserServiceClient:
             slow_mo: Slow motion delay in ms
             viewport_width: Browser viewport width
             viewport_height: Browser viewport height
+            devtools_url: Chrome DevTools URL (required for chrome-devtools mode)
 
         Returns:
             SessionCreateResponse with session ID and WebSocket URL
@@ -112,6 +114,7 @@ class BrowserServiceClient:
             slow_mo=slow_mo,
             viewport_width=viewport_width,
             viewport_height=viewport_height,
+            devtools_url=devtools_url,
         )
 
         response = await self.client.post("/sessions", json=request.model_dump())
@@ -147,7 +150,7 @@ class BrowserServiceClient:
     async def navigate(
         self,
         url: str,
-        wait_until: str = "domcontentloaded",
+        wait_until: str = "networkidle",
         timeout: int | None = None,
     ) -> NavigateResponse:
         """Navigate to a URL.

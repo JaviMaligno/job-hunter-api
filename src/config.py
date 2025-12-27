@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # Anthropic Claude SDK
     anthropic_api_key: str | None = None
 
+    # Gemini API (for GeminiOrchestratorAgent)
+    gemini_api_key: str | None = None
+
+    # 2captcha API (for CAPTCHA solving)
+    twocaptcha_api_key: str | None = None
+
     # AWS Bedrock (alternative to direct Anthropic API)
     bedrock_enabled: bool = False
     bedrock_region: str = "us-east-1"
@@ -61,6 +67,11 @@ class Settings(BaseSettings):
     microsoft_client_id: str | None = None
     microsoft_client_secret: str | None = None
     microsoft_redirect_uri: str = "http://localhost:8000/api/auth/microsoft/callback"
+
+    # LinkedIn OAuth (for job applications automation)
+    linkedin_client_id: str | None = None
+    linkedin_client_secret: str | None = None
+    linkedin_redirect_uri: str = "http://localhost:8000/api/linkedin/callback"
 
     # Encryption for storing user API keys
     encryption_key: str | None = None

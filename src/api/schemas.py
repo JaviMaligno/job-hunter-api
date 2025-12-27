@@ -56,6 +56,7 @@ class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    base_cv_content: str | None = None
 
     class Config:
         from_attributes = True

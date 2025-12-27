@@ -32,10 +32,10 @@ class AIExtractedJob:
 
 # Model priority list - Best quality first, with fallbacks for availability
 GEMINI_MODELS = [
-    "gemini-2.5-pro",  # Best quality (may hit rate limits on free tier)
-    "gemini-2.5-flash",  # Very good, fast (may be overloaded)
-    "gemini-2.0-flash",  # Good fallback, stable
-    "gemini-1.5-flash-latest",  # Last resort, very stable
+    "gemini-3-flash-preview",  # Best quality, 3x faster than 2.5 Pro (free tier: 5k/month)
+    "gemini-2.5-flash",  # Very good fallback
+    "gemini-2.5-pro",  # High quality fallback
+    "gemini-2.0-flash",  # Stable fallback
 ]
 
 # Function declaration for structured output via tool calling

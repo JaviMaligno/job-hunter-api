@@ -50,6 +50,8 @@ class FormFillerInput(BaseModel):
     mode: ApplicationMode = ApplicationMode.ASSISTED
     ats_type: str | None = None  # Auto-detected if None
     headless: bool = True
+    browser_mode: BrowserMode = BrowserMode.PLAYWRIGHT
+    devtools_url: str | None = None  # Required for chrome-devtools mode
 
 
 class FormAnalysis(BaseModel):
@@ -220,10 +222,11 @@ Always respond with valid JSON matching the requested schema."""
         assert client is not None
 
         # Create browser session
-        logger.info(f"Creating browser session for {input_data.application_url}")
+        logger.info(f"Creating browser session for {input_data.application_url} (mode={input_data.browser_mode.value})")
         session = await client.create_session(
-            mode=BrowserMode.PLAYWRIGHT,
+            mode=input_data.browser_mode,
             headless=input_data.headless,
+            devtools_url=input_data.devtools_url,
         )
 
         # Navigate to application URL
@@ -236,6 +239,11 @@ Always respond with valid JSON matching the requested schema."""
                 browser_session_id=session.session_id,
                 error_message=f"Failed to navigate: {nav_result.error}",
             )
+
+        # Wait a bit for JS-loaded content (CAPTCHAs, dynamic forms)
+        import asyncio
+        await asyncio.sleep(2)
+        logger.info("Waited for page content to fully load")
 
         # Analyze the form
         logger.info("Analyzing form structure")
@@ -360,6 +368,9 @@ Always respond with valid JSON matching the requested schema."""
         has_captcha, captcha_type = self._detect_captcha(page_content)
         has_login_required = self._detect_login_required(page_url, page_content)
 
+        logger.info(f"Form analysis: has_captcha={has_captcha}, captcha_type={captcha_type}, has_login={has_login_required}")
+        logger.debug(f"Page content length: {len(page_content)}, contains 'recaptcha': {'recaptcha' in page_content.lower()}")
+
         # Check for file upload fields
         has_file_upload = any(
             f.field_type == "file" for f in dom.form_fields
@@ -427,15 +438,29 @@ Always respond with valid JSON matching the requested schema."""
         """
         content_lower = content.lower()
 
+        # Expanded CAPTCHA detection patterns
         captcha_patterns = {
-            "cloudflare": ["cf-turnstile", "challenge-platform", "cloudflare"],
-            "hcaptcha": ["h-captcha", "hcaptcha.com"],
-            "recaptcha": ["g-recaptcha", "recaptcha.net", "grecaptcha"],
+            "cloudflare": [
+                "cf-turnstile", "challenge-platform", "cloudflare-challenge",
+                "cf-chl-widget", "turnstile", "challenge-running",
+            ],
+            "hcaptcha": [
+                "h-captcha", "hcaptcha.com", "hcaptcha-box", "data-hcaptcha",
+            ],
+            "recaptcha": [
+                "g-recaptcha", "recaptcha.net", "grecaptcha", "recaptcha-token",
+                "recaptcha/api", "google.com/recaptcha", "recaptcha-anchor",
+                "recaptcha_challenge", "rc-anchor", "recaptcha-checkbox",
+            ],
+            "funcaptcha": [
+                "funcaptcha", "arkoselabs.com", "arkose",
+            ],
         }
 
         for captcha_type, patterns in captcha_patterns.items():
             for pattern in patterns:
                 if pattern in content_lower:
+                    logger.info(f"CAPTCHA detected: type={captcha_type}, pattern={pattern}")
                     return True, captcha_type
 
         return False, None

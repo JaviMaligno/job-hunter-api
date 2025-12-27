@@ -26,6 +26,20 @@ except ImportError:
     CaptchaSolver = None
     CaptchaType = None
 
+# Import intervention manager for manual intervention support
+try:
+    from src.automation.intervention_manager import (
+        InterventionManager,
+        InterventionType,
+        get_intervention_manager,
+    )
+    INTERVENTION_AVAILABLE = True
+except ImportError:
+    INTERVENTION_AVAILABLE = False
+    InterventionManager = None
+    InterventionType = None
+    get_intervention_manager = None
+
 logger = logging.getLogger(__name__)
 
 # Try to import langfuse, but make it optional
@@ -79,6 +93,11 @@ class OrchestratorInput(BaseModel):
     cv_file_path: str | None = Field(default=None, description="Path to CV file for upload")
     cover_letter: str | None = Field(default=None, description="Optional cover letter")
     headless: bool = Field(default=False, description="Run browser in headless mode")
+    # Session info for intervention management
+    session_id: str | None = Field(default=None, description="Session ID for intervention tracking")
+    user_id: str | None = Field(default=None, description="User ID for intervention tracking")
+    wait_for_intervention: bool = Field(default=True, description="Keep browser open and wait for user to resolve blockers")
+    intervention_timeout_seconds: float = Field(default=1800, description="Max time to wait for intervention (30 min)")
 
 
 class FieldFilled(BaseModel):
@@ -136,7 +155,7 @@ class GeminiOrchestratorAgent:
     """
 
     # Model priorities
-    MODEL_PRIMARY = "gemini-2.5-pro"
+    MODEL_PRIMARY = "gemini-3-flash-preview"
     MODEL_FALLBACK = "gemini-2.5-flash"
 
     # System prompt for form analysis and filling
@@ -177,7 +196,10 @@ Always be thorough but cautious - don't submit until all required fields are fil
             captcha_api_key: 2captcha API key (uses TWOCAPTCHA_API_KEY env var if not provided)
             auto_solve_captcha: Whether to automatically solve CAPTCHAs
         """
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        # Import settings for fallback API keys
+        from src.config import settings
+
+        self.api_key = api_key or settings.gemini_api_key or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY not found")
 
@@ -192,7 +214,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
         # Initialize CAPTCHA solver if available
         self._captcha_solver: CaptchaSolver | None = None
         if CAPTCHA_SOLVER_AVAILABLE and auto_solve_captcha:
-            captcha_key = captcha_api_key or os.getenv("TWOCAPTCHA_API_KEY")
+            captcha_key = captcha_api_key or settings.twocaptcha_api_key or os.getenv("TWOCAPTCHA_API_KEY")
             if captcha_key:
                 self._captcha_solver = CaptchaSolver(api_key=captcha_key)
                 logger.info("CAPTCHA solver initialized")
@@ -224,7 +246,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
 
         server_params = StdioServerParameters(
             command="npx",
-            args=["chrome-devtools-mcp@latest"],
+            args=["chrome-devtools-mcp@latest", "--isolated"],
             env=None,
         )
 
@@ -278,15 +300,94 @@ Always be thorough but cautious - don't submit until all required fields are fil
                             else:
                                 blocker.resolution_error = captcha_result.get("error")
 
-                        # If blocker not resolved, return for manual intervention
+                        # If blocker not resolved, handle manual intervention
                         if not blocker.auto_resolved and not blocker.can_auto_resolve:
-                            return OrchestratorOutput(
-                                success=False,
-                                status="needs_intervention",
-                                blocker=blocker,
-                                captcha_info=captcha_info,
-                                steps_completed=steps_completed,
-                            )
+                            # If wait_for_intervention is enabled and we have session info, wait for user
+                            if (
+                                input_data.wait_for_intervention
+                                and input_data.session_id
+                                and input_data.user_id
+                                and INTERVENTION_AVAILABLE
+                            ):
+                                steps_completed.append("waiting_for_intervention")
+                                logger.info(
+                                    f"Blocker detected ({blocker.blocker_type}). "
+                                    f"Browser staying open for manual intervention. "
+                                    f"Session: {input_data.session_id}"
+                                )
+                                
+                                # Get current URL for intervention context
+                                current_url = await self._get_current_url()
+                                
+                                # Create intervention request
+                                intervention_mgr = get_intervention_manager()
+                                intervention = await intervention_mgr.request_intervention(
+                                    session_id=input_data.session_id,
+                                    user_id=input_data.user_id,
+                                    intervention_type=(
+                                        InterventionType.CAPTCHA 
+                                        if blocker.blocker_type == "captcha" 
+                                        else InterventionType.OTHER
+                                    ),
+                                    title=f"Manual intervention required: {blocker.blocker_type}",
+                                    description=blocker.description,
+                                    instructions=(
+                                        "The browser window is open. Please resolve the blocker "
+                                        "(e.g., solve the CAPTCHA, complete login) and then click "
+                                        "'Continue' in the UI when done."
+                                    ),
+                                    current_url=current_url,
+                                    captcha_type=blocker.captcha_subtype,
+                                    captcha_solve_attempted=captcha_info.attempted if captcha_info else False,
+                                    captcha_solve_error=captcha_info.error if captcha_info else None,
+                                    timeout_minutes=int(input_data.intervention_timeout_seconds / 60),
+                                )
+                                
+                                # Wait for user to resolve the intervention
+                                # Browser stays open during this time!
+                                logger.info(f"Waiting for intervention {intervention.id} resolution...")
+                                resolution, updated_intervention = await intervention_mgr.wait_for_resolution(
+                                    intervention.id,
+                                    timeout_seconds=input_data.intervention_timeout_seconds,
+                                )
+                                
+                                if resolution and resolution.action == "continue":
+                                    # User resolved it, continue with automation
+                                    steps_completed.append("intervention_resolved")
+                                    logger.info("Intervention resolved by user, continuing automation")
+                                    # Take fresh snapshot after user intervention
+                                    await asyncio.sleep(1)
+                                    snapshot = await self._take_snapshot()
+                                    # Clear the blocker since user resolved it
+                                    blocker = None
+                                elif resolution and resolution.action == "cancel":
+                                    return OrchestratorOutput(
+                                        success=False,
+                                        status="cancelled",
+                                        blocker=blocker,
+                                        captcha_info=captcha_info,
+                                        steps_completed=steps_completed,
+                                        error_message="User cancelled intervention",
+                                    )
+                                else:
+                                    # Timeout or other issue
+                                    return OrchestratorOutput(
+                                        success=False,
+                                        status="needs_intervention",
+                                        blocker=blocker,
+                                        captcha_info=captcha_info,
+                                        steps_completed=steps_completed,
+                                        error_message="Intervention timed out",
+                                    )
+                            else:
+                                # No intervention waiting, return immediately
+                                return OrchestratorOutput(
+                                    success=False,
+                                    status="needs_intervention",
+                                    blocker=blocker,
+                                    captcha_info=captcha_info,
+                                    steps_completed=steps_completed,
+                                )
 
                     # Step 3: If on job listing, click apply button
                     if "job_listing" in analysis.lower():

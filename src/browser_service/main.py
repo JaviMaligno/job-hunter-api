@@ -317,7 +317,7 @@ async def get_page_content(session_id: str, manager: ManagerDep) -> dict:
     content = await adapter.get_page_content()
     manager.update_session_activity(session_id)
 
-    return {"content": content[:50000]}  # Limit to 50KB
+    return {"content": content[:500000]}  # Limit to 500KB for CAPTCHA detection
 
 
 # ============================================================================

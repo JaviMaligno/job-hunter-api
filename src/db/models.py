@@ -31,10 +31,11 @@ class Base(DeclarativeBase):
 
 
 class EmailProvider(str, enum.Enum):
-    """Email provider types."""
+    """Email provider types (also used for OAuth connections like LinkedIn)."""
 
     GMAIL = "gmail"
     OUTLOOK = "outlook"
+    LINKEDIN = "linkedin"  # For LinkedIn OAuth job applications
 
 
 class JobStatus(str, enum.Enum):

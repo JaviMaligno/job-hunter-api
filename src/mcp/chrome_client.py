@@ -49,6 +49,7 @@ class ChromeDevToolsMCP:
         command: str = "npx",
         args: list[str] | None = None,
         cwd: str | None = None,
+        port: int | None = None,
     ) -> None:
         """Initialize Chrome DevTools MCP client.
 
@@ -56,10 +57,15 @@ class ChromeDevToolsMCP:
             command: Command to run MCP server (default: npx)
             args: Arguments for command (default: [chrome-devtools-mcp@latest])
             cwd: Working directory for server process
+            port: Chrome DevTools debugging port (default: 9222)
         """
+        default_args = ["chrome-devtools-mcp@latest", "--isolated"]
+        if port:
+            default_args.append(f"--port={port}")
+
         self.server_params = StdioServerParameters(
             command=command,
-            args=args or ["chrome-devtools-mcp@latest"],
+            args=args or default_args,
             cwd=cwd,
         )
         self._session: ClientSession | None = None
