@@ -1,0 +1,28 @@
+"""Add granted_scopes to email_connections.
+
+Revision ID: 20251227_granted_scopes
+Revises: 20251217_add_auth_tables
+Create Date: 2025-12-27
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = "20251227_granted_scopes"
+down_revision = "20251217_add_auth_tables"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Add granted_scopes column to email_connections table
+    op.add_column(
+        "email_connections",
+        sa.Column("granted_scopes", sa.Text(), nullable=True, server_default=""),
+    )
+
+
+def downgrade() -> None:
+    op.drop_column("email_connections", "granted_scopes")
