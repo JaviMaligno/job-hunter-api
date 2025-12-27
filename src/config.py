@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     # Browser Service (Phase 2)
     browser_service_url: str = "http://localhost:8001"
     browser_service_timeout: int = Field(default=30000, ge=5000, le=120000)  # ms
-    default_browser_mode: str = "playwright"  # "chrome-devtools" or "playwright"
+    default_browser_mode: str = "chrome-devtools"  # "chrome-devtools" or "playwright"
 
     # Playwright Settings
     playwright_headless: bool = True
