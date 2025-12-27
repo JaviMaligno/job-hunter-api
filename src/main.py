@@ -70,9 +70,11 @@ _dev_origins = [
     "http://127.0.0.1:3001",
     "http://127.0.0.1:8000",
 ]
+# Production uses FRONTEND_URL env var (set in Render dashboard)
+_prod_origins = [settings.frontend_url] if settings.frontend_url else []
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_dev_origins if settings.is_development else ["https://job-hunter.vercel.app"],
+    allow_origins=_dev_origins if settings.is_development else _prod_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
