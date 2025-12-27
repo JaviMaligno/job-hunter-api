@@ -137,12 +137,20 @@ class BrowserServiceClient:
         logger.info(f"Closed browser session: {self._session_id}")
         self._session_id = None
 
-    async def close_session_by_id(self, session_id: str) -> None:
+    async def close_session_by_id(self, session_id: str, timeout: float = 10.0) -> None:
         """Close a browser session by its ID.
 
         This is useful for closing sessions that were created elsewhere.
+
+        Args:
+            session_id: The ID of the session to close
+            timeout: Timeout in seconds (default 10s, MCP close can be slow)
         """
-        response = await self.client.delete(f"/sessions/{session_id}")
+        import httpx
+        response = await self.client.delete(
+            f"/sessions/{session_id}",
+            timeout=httpx.Timeout(timeout)
+        )
         response.raise_for_status()
         logger.info(f"Closed browser session: {session_id}")
 

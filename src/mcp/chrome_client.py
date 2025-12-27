@@ -20,6 +20,7 @@ Usage:
         screenshot = await chrome.screenshot()
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
@@ -97,13 +98,43 @@ class ChromeDevToolsMCP:
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Close MCP connection and stop server."""
-        if self._session:
-            await self._session.__aexit__(exc_type, exc_val, exc_tb)
-            self._session = None
+        """Close MCP connection and stop server.
 
-        if self._context_manager:
-            await self._context_manager.__aexit__(exc_type, exc_val, exc_tb)
+        Note: When closed from a different task than it was opened in,
+        anyio may raise RuntimeError about cancel scopes. This is expected
+        and safely handled. Uses a timeout to prevent hanging.
+        """
+        async def _close_with_timeout():
+            try:
+                if self._session:
+                    try:
+                        await self._session.__aexit__(exc_type, exc_val, exc_tb)
+                    except RuntimeError as e:
+                        if "cancel scope" in str(e):
+                            logger.debug(f"Session close (expected in cross-task scenarios): {e}")
+                        else:
+                            raise
+                    finally:
+                        self._session = None
+
+                if self._context_manager:
+                    try:
+                        await self._context_manager.__aexit__(exc_type, exc_val, exc_tb)
+                    except (RuntimeError, BaseExceptionGroup) as e:
+                        # Handle anyio cancel scope errors and exception groups
+                        # These are expected when closing from a different task
+                        logger.debug(f"Context manager close (expected in cross-task scenarios): {e}")
+                    finally:
+                        self._context_manager = None
+            except Exception as e:
+                logger.warning(f"Error during MCP cleanup (non-fatal): {e}")
+
+        try:
+            # Use timeout to prevent hanging during close
+            await asyncio.wait_for(_close_with_timeout(), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning("MCP close timed out after 5s, forcing cleanup")
+            self._session = None
             self._context_manager = None
 
         logger.info("Chrome DevTools MCP session closed")

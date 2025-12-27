@@ -939,14 +939,19 @@ async def resolve_intervention(
         session = await session_store.load(intervention.session_id)
         logger.info(f"Session loaded: {session.session_id if session else 'None'}, browser_session_id={session.browser_session_id if session else 'N/A'}")
         if session and session.browser_session_id:
-            try:
-                from src.automation.client import BrowserServiceClient
-                async with BrowserServiceClient() as client:
-                    await client.close_session_by_id(session.browser_session_id)
-                browser_closed = True
-                logger.info(f"Closed browser session {session.browser_session_id} for intervention {intervention_id}")
-            except Exception as e:
-                logger.warning(f"Failed to close browser session: {e}")
+            # Fire and forget - close browser in background to avoid blocking
+            async def close_browser_background(browser_session_id: str):
+                try:
+                    from src.automation.client import BrowserServiceClient
+                    async with BrowserServiceClient() as client:
+                        await client.close_session_by_id(browser_session_id, timeout=30.0)
+                    logger.info(f"Background: Closed browser session {browser_session_id}")
+                except Exception as e:
+                    logger.warning(f"Background: Failed to close browser session: {e}")
+
+            asyncio.create_task(close_browser_background(session.browser_session_id))
+            browser_closed = True  # Mark as closed since we initiated the close
+            logger.info(f"Initiated browser session close for {session.browser_session_id}")
         else:
             logger.warning(f"No browser_session_id found for session {intervention.session_id}")
 

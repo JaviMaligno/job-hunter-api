@@ -105,14 +105,8 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         logger.info("Closing Chrome DevTools MCP adapter")
 
         if self._mcp_client:
-            try:
-                await self._mcp_client.__aexit__(None, None, None)
-            except RuntimeError as e:
-                # Handle "cancel scope in different task" error from anyio
-                # This happens when close() is called from a different task than initialize()
-                logger.warning(f"MCP client close warning (safe to ignore): {e}")
-            finally:
-                self._mcp_client = None
+            await self._mcp_client.__aexit__(None, None, None)
+            self._mcp_client = None
 
         logger.info("Chrome DevTools MCP adapter closed")
 
