@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20251227_granted_scopes"
-down_revision = "20251217_add_auth_tables"
+revision = "c9d0e1f2a3b4"
+down_revision = "b8c9d0e1f2a3"
 branch_labels = None
 depends_on = None
 
