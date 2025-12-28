@@ -147,9 +147,9 @@ class BrowserServiceClient:
             timeout: Timeout in seconds (default 10s, MCP close can be slow)
         """
         import httpx
+
         response = await self.client.delete(
-            f"/sessions/{session_id}",
-            timeout=httpx.Timeout(timeout)
+            f"/sessions/{session_id}", timeout=httpx.Timeout(timeout)
         )
         response.raise_for_status()
         logger.info(f"Closed browser session: {session_id}")

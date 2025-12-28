@@ -173,12 +173,15 @@ class BlockerDetector:
 
         if any(login_indicators):
             # But make sure it's not just a login form on the application page
-            if not any(form_indicator in html_lower for form_indicator in [
-                "apply",
-                "application",
-                "resume",
-                "cover letter",
-            ]):
+            if not any(
+                form_indicator in html_lower
+                for form_indicator in [
+                    "apply",
+                    "application",
+                    "resume",
+                    "cover letter",
+                ]
+            ):
                 logger.info("Login required detected (page structure)")
                 return DetectedBlocker(
                     type=BlockerType.LOGIN_REQUIRED,

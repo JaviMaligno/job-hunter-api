@@ -1,7 +1,6 @@
 """Rate limiting service for application submissions."""
 
 from datetime import datetime, timedelta
-from typing import Dict
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -11,7 +10,7 @@ from src.config import settings
 from src.db.models import Application, ApplicationMode, ApplicationStatus
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceededError(Exception):
     """Raised when rate limit is exceeded."""
 
     def __init__(self, limit: int, period: str, reset_at: datetime):
@@ -47,24 +46,20 @@ class RateLimiter:
             mode: Application mode
 
         Raises:
-            RateLimitExceeded: If rate limit exceeded
+            RateLimitExceededError: If rate limit exceeded
         """
         if mode == ApplicationMode.ASSISTED:
             # No limit for assisted mode (user is in control)
             return
 
-        today_start = datetime.utcnow().replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow_start = today_start + timedelta(days=1)
 
         # Count today's automated applications (SEMI_AUTO + AUTO)
         query = (
             select(func.count(Application.id))
             .where(Application.user_id == user_id)
-            .where(
-                Application.mode.in_([ApplicationMode.SEMI_AUTO, ApplicationMode.AUTO])
-            )
+            .where(Application.mode.in_([ApplicationMode.SEMI_AUTO, ApplicationMode.AUTO]))
             .where(Application.status == ApplicationStatus.SUBMITTED)
             .where(Application.completed_at >= today_start)
             .where(Application.completed_at < tomorrow_start)
@@ -73,7 +68,7 @@ class RateLimiter:
 
         # Check total automated limit
         if total_auto_count >= settings.max_applications_per_day:
-            raise RateLimitExceeded(
+            raise RateLimitExceededError(
                 limit=settings.max_applications_per_day,
                 period="day",
                 reset_at=tomorrow_start,
@@ -92,7 +87,7 @@ class RateLimiter:
             auto_count = await db.scalar(query) or 0
 
             if auto_count >= settings.max_auto_applications_per_day:
-                raise RateLimitExceeded(
+                raise RateLimitExceededError(
                     limit=settings.max_auto_applications_per_day,
                     period="day (AUTO mode)",
                     reset_at=tomorrow_start,
@@ -102,7 +97,7 @@ class RateLimiter:
         self,
         db: AsyncSession,
         user_id: UUID,
-    ) -> Dict[str, int | str]:
+    ) -> dict[str, int | str]:
         """Get current rate limit usage for a user.
 
         Args:
@@ -112,18 +107,14 @@ class RateLimiter:
         Returns:
             Dict with counts and limits
         """
-        today_start = datetime.utcnow().replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow_start = today_start + timedelta(days=1)
 
         # Count automated applications
         query = (
             select(func.count(Application.id))
             .where(Application.user_id == user_id)
-            .where(
-                Application.mode.in_([ApplicationMode.SEMI_AUTO, ApplicationMode.AUTO])
-            )
+            .where(Application.mode.in_([ApplicationMode.SEMI_AUTO, ApplicationMode.AUTO]))
             .where(Application.status == ApplicationStatus.SUBMITTED)
             .where(Application.completed_at >= today_start)
             .where(Application.completed_at < tomorrow_start)

@@ -15,13 +15,14 @@ import sys
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from google import genai
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -98,10 +99,7 @@ async def run_automation_with_gemini():
             """
 
             try:
-                response = client.models.generate_content(
-                    model=MODEL,
-                    contents=analysis_prompt
-                )
+                response = client.models.generate_content(model=MODEL, contents=analysis_prompt)
                 print("[OK] Gemini analysis:")
                 print(response.text[:500])
             except Exception as e:
@@ -126,8 +124,7 @@ async def run_automation_with_gemini():
 
                 try:
                     button_response = client.models.generate_content(
-                        model=MODEL,
-                        contents=find_button_prompt
+                        model=MODEL, contents=find_button_prompt
                     )
                     button_uid = button_response.text.strip()
                     print(f"[OK] Button UID identified: {button_uid}")
@@ -140,7 +137,7 @@ async def run_automation_with_gemini():
 
                         # Get new snapshot
                         new_snapshot = await mcp.call_tool("take_snapshot", {})
-                        print(f"[OK] New page state captured")
+                        print("[OK] New page state captured")
                     else:
                         print(f"[WARN] Invalid button UID: {button_uid}")
 
@@ -173,8 +170,7 @@ async def run_automation_with_gemini():
 
             try:
                 fields_response = client.models.generate_content(
-                    model=MODEL,
-                    contents=form_fields_prompt
+                    model=MODEL, contents=form_fields_prompt
                 )
                 fields_text = fields_response.text.strip()
 
@@ -184,7 +180,7 @@ async def run_automation_with_gemini():
                     if fields_text.startswith("json"):
                         fields_text = fields_text[4:]
 
-                print(f"[OK] Gemini identified fields:")
+                print("[OK] Gemini identified fields:")
                 print(fields_text[:500])
 
                 # Try to parse and fill fields

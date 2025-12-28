@@ -1,6 +1,6 @@
 """Base repository with common CRUD operations."""
 
-from typing import Generic, List, Type, TypeVar
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from sqlalchemy import select
@@ -29,7 +29,7 @@ class BaseRepository(Generic[ModelType]):
                 return result.scalar_one_or_none()
     """
 
-    def __init__(self, model: Type[ModelType], db: AsyncSession):
+    def __init__(self, model: type[ModelType], db: AsyncSession):
         """Initialize repository.
 
         Args:
@@ -55,7 +55,7 @@ class BaseRepository(Generic[ModelType]):
         self,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[ModelType]:
+    ) -> list[ModelType]:
         """Get multiple entities with pagination.
 
         Args:

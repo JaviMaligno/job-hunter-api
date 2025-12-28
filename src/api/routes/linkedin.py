@@ -4,7 +4,7 @@ import base64
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -51,6 +51,7 @@ def _verify_state(state: str) -> str | None:
     except Exception:
         return None
 
+
 router = APIRouter()
 
 # LinkedIn OAuth scopes
@@ -60,7 +61,6 @@ LINKEDIN_SCOPES = [
     "profile",  # Read basic profile
     "email",  # Get user's email
 ]
-
 
 
 # ============================================================================
@@ -231,13 +231,11 @@ async def linkedin_oauth_callback(
 
         # Get the LinkedIn user info
         user_info = await _get_linkedin_user_info(access_token)
-        linkedin_email = user_info.get("email", "")
+        user_info.get("email", "")
         linkedin_name = user_info.get("name", "")
 
         # Calculate token expiry
-        token_expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
-            seconds=expires_in
-        )
+        token_expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=expires_in)
 
         # Find or create EmailConnection (using LINKEDIN provider)
         result = await db.execute(
@@ -271,10 +269,12 @@ async def linkedin_oauth_callback(
         await db.flush()
 
         # Redirect to frontend with success
-        success_url = f"{settings.frontend_url}/profile?linkedin_connected=true&linkedin_name={linkedin_name}"
+        success_url = (
+            f"{settings.frontend_url}/profile?linkedin_connected=true&linkedin_name={linkedin_name}"
+        )
         return RedirectResponse(url=success_url)
 
-    except httpx.HTTPStatusError as e:
+    except httpx.HTTPStatusError:
         error_url = f"{settings.frontend_url}/profile?linkedin_error=token_exchange_failed"
         return RedirectResponse(url=error_url)
     except Exception as e:

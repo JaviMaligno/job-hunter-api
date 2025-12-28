@@ -10,17 +10,25 @@ from src.integrations.claude.client import ClaudeClient, get_claude_client, get_
 # Try to import langfuse, but make it optional to avoid blocking
 try:
     from langfuse.decorators import langfuse_context, observe
+
     LANGFUSE_AVAILABLE = True
 except Exception:
     LANGFUSE_AVAILABLE = False
+
     # Dummy decorator when langfuse is not available
     def observe():
         def decorator(func):
             return func
+
         return decorator
+
     class DummyContext:
-        def update_current_trace(self, **kwargs): pass
-        def update_current_observation(self, **kwargs): pass
+        def update_current_trace(self, **kwargs):
+            pass
+
+        def update_current_observation(self, **kwargs):
+            pass
+
     langfuse_context = DummyContext()
 
 # Type variable for agent output

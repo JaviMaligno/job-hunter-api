@@ -110,7 +110,9 @@ class BrowserAdapter(ABC):
         ...
 
     @abstractmethod
-    async def screenshot(self, full_page: bool = False, path: str | None = None) -> ScreenshotResponse:
+    async def screenshot(
+        self, full_page: bool = False, path: str | None = None
+    ) -> ScreenshotResponse:
         """Take a screenshot.
 
         Args:
@@ -135,7 +137,9 @@ class BrowserAdapter(ABC):
         ...
 
     @abstractmethod
-    async def get_dom(self, selector: str | None = None, form_fields_only: bool = False) -> DOMResponse:
+    async def get_dom(
+        self, selector: str | None = None, form_fields_only: bool = False
+    ) -> DOMResponse:
         """Get DOM information.
 
         Args:

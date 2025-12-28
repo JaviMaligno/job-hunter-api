@@ -9,10 +9,9 @@ sys.path.insert(0, str(project_root))
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import create_engine, pool
-from sqlalchemy.engine import Connection
 
+from alembic import context
 from src.config import settings
 from src.db.models import Base
 

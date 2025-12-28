@@ -17,17 +17,16 @@ import sys
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from src.integrations.captcha.solver import (
     CaptchaSolver,
     CaptchaType,
-    solve_captcha,
 )
-
 
 # Sample HTML snippets for testing detection
 SAMPLE_TURNSTILE_HTML = """
@@ -142,10 +141,10 @@ def test_solver_configuration():
 
     print(f"  Solver configured: {solver.is_configured}")
     if solver.is_configured:
-        print(f"  [OK] 2captcha API key is set")
+        print("  [OK] 2captcha API key is set")
     else:
-        print(f"  [WARN] No 2captcha API key - real solving disabled")
-        print(f"         Set TWOCAPTCHA_API_KEY in .env to enable")
+        print("  [WARN] No 2captcha API key - real solving disabled")
+        print("         Set TWOCAPTCHA_API_KEY in .env to enable")
 
 
 async def test_balance():
@@ -162,7 +161,7 @@ async def test_balance():
     if balance is not None:
         print(f"  [OK] Balance: ${balance:.2f}")
     else:
-        print(f"  [FAIL] Could not get balance")
+        print("  [FAIL] Could not get balance")
 
 
 async def test_real_solve():

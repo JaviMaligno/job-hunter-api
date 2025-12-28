@@ -1,10 +1,10 @@
 """Authentication API routes."""
 
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
@@ -248,10 +248,7 @@ async def google_login(request: GoogleLoginRequest, db: DbDep) -> GoogleLoginRes
         await db.flush()
 
     # Check if Gmail scopes are included
-    has_gmail_scope = (
-        request.scope
-        and "https://www.googleapis.com/auth/gmail" in request.scope
-    )
+    has_gmail_scope = request.scope and "https://www.googleapis.com/auth/gmail" in request.scope
 
     gmail_connected = False
 
@@ -310,7 +307,7 @@ async def refresh_tokens(request: RefreshRequest, db: DbDep) -> TokenResponse:
     The old refresh token is revoked and a new one is issued.
     """
     try:
-        payload = verify_token(request.refresh_token, token_type="refresh")
+        verify_token(request.refresh_token, token_type="refresh")
     except TokenError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -323,7 +320,7 @@ async def refresh_tokens(request: RefreshRequest, db: DbDep) -> TokenResponse:
         select(RefreshToken).where(
             RefreshToken.token_hash == token_hash,
             RefreshToken.revoked == False,  # noqa: E712
-            RefreshToken.expires_at > datetime.now(timezone.utc),
+            RefreshToken.expires_at > datetime.now(UTC),
         )
     )
     db_token = result.scalar_one_or_none()
@@ -453,7 +450,7 @@ async def oauth_login(provider: str) -> RedirectResponse:
     state = secrets.token_urlsafe(32)
     _oauth_states[state] = {
         "provider": provider,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
 
     auth_url = oauth_provider.get_authorization_url(state)

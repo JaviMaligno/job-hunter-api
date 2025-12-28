@@ -11,9 +11,10 @@ import sys
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from src.agents.gemini_orchestrator import (
@@ -21,7 +22,6 @@ from src.agents.gemini_orchestrator import (
     OrchestratorInput,
     UserFormData,
 )
-
 
 # Test data
 TEST_USER = UserFormData(
@@ -75,7 +75,7 @@ async def test_orchestrator():
     print("=" * 60)
 
     agent = GeminiOrchestratorAgent()
-    print(f"\n[OK] Agent initialized")
+    print("\n[OK] Agent initialized")
     print(f"     Model: {agent.model}")
 
     for job_url in TEST_JOBS:
@@ -92,7 +92,7 @@ async def test_orchestrator():
         try:
             result = await agent.run(input_data)
 
-            print(f"\n[RESULT]")
+            print("\n[RESULT]")
             print(f"  Success: {result.success}")
             print(f"  Status: {result.status}")
             print(f"  Steps: {', '.join(result.steps_completed)}")
@@ -116,6 +116,7 @@ async def test_orchestrator():
         except Exception as e:
             print(f"[ERROR] {e}")
             import traceback
+
             traceback.print_exc()
 
     print("\n" + "=" * 60)

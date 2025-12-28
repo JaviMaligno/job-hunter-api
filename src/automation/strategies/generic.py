@@ -3,8 +3,8 @@
 import logging
 from typing import Any
 
-from src.automation.models import UserFormData
 from src.automation.client import BrowserServiceClient
+from src.automation.models import UserFormData
 from src.automation.strategies.base import ATSStrategy, FormFillResult, SubmitResult
 from src.automation.strategies.registry import ATSStrategyRegistry
 
@@ -33,51 +33,65 @@ class GenericStrategy(ATSStrategy):
     def field_selectors(self) -> dict[str, str]:
         """Common field selectors."""
         return {
-            "first_name": ", ".join([
-                'input[name*="first_name"]',
-                'input[name*="firstname"]',
-                'input[name*="fname"]',
-                'input[placeholder*="First"]',
-                'input[id*="first_name"]',
-                'input[id*="firstName"]',
-            ]),
-            "last_name": ", ".join([
-                'input[name*="last_name"]',
-                'input[name*="lastname"]',
-                'input[name*="lname"]',
-                'input[placeholder*="Last"]',
-                'input[id*="last_name"]',
-                'input[id*="lastName"]',
-            ]),
-            "email": ", ".join([
-                'input[type="email"]',
-                'input[name*="email"]',
-                'input[placeholder*="email"]',
-                'input[id*="email"]',
-            ]),
-            "phone": ", ".join([
-                'input[type="tel"]',
-                'input[name*="phone"]',
-                'input[name*="telephone"]',
-                'input[placeholder*="phone"]',
-                'input[id*="phone"]',
-            ]),
-            "linkedin": ", ".join([
-                'input[name*="linkedin"]',
-                'input[placeholder*="LinkedIn"]',
-                'input[id*="linkedin"]',
-            ]),
-            "resume": ", ".join([
-                'input[type="file"][name*="resume"]',
-                'input[type="file"][name*="cv"]',
-                'input[type="file"][accept*="pdf"]',
-                'input[type="file"]',
-            ]),
-            "cover_letter": ", ".join([
-                'textarea[name*="cover"]',
-                'textarea[placeholder*="cover"]',
-                'textarea[id*="cover"]',
-            ]),
+            "first_name": ", ".join(
+                [
+                    'input[name*="first_name"]',
+                    'input[name*="firstname"]',
+                    'input[name*="fname"]',
+                    'input[placeholder*="First"]',
+                    'input[id*="first_name"]',
+                    'input[id*="firstName"]',
+                ]
+            ),
+            "last_name": ", ".join(
+                [
+                    'input[name*="last_name"]',
+                    'input[name*="lastname"]',
+                    'input[name*="lname"]',
+                    'input[placeholder*="Last"]',
+                    'input[id*="last_name"]',
+                    'input[id*="lastName"]',
+                ]
+            ),
+            "email": ", ".join(
+                [
+                    'input[type="email"]',
+                    'input[name*="email"]',
+                    'input[placeholder*="email"]',
+                    'input[id*="email"]',
+                ]
+            ),
+            "phone": ", ".join(
+                [
+                    'input[type="tel"]',
+                    'input[name*="phone"]',
+                    'input[name*="telephone"]',
+                    'input[placeholder*="phone"]',
+                    'input[id*="phone"]',
+                ]
+            ),
+            "linkedin": ", ".join(
+                [
+                    'input[name*="linkedin"]',
+                    'input[placeholder*="LinkedIn"]',
+                    'input[id*="linkedin"]',
+                ]
+            ),
+            "resume": ", ".join(
+                [
+                    'input[type="file"][name*="resume"]',
+                    'input[type="file"][name*="cv"]',
+                    'input[type="file"][accept*="pdf"]',
+                    'input[type="file"]',
+                ]
+            ),
+            "cover_letter": ", ".join(
+                [
+                    'textarea[name*="cover"]',
+                    'textarea[placeholder*="cover"]',
+                    'textarea[id*="cover"]',
+                ]
+            ),
         }
 
     async def detect(self, page_html: str, page_url: str) -> bool:
@@ -112,17 +126,22 @@ class GenericStrategy(ATSStrategy):
 
         standard_types = {"text", "email", "tel", "file", "hidden"}
         standard_names = {
-            "first_name", "last_name", "email", "phone",
-            "linkedin", "github", "resume", "cv",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "linkedin",
+            "github",
+            "resume",
+            "cv",
         }
 
         for field in dom.form_fields:
             name_lower = (field.field_name or "").lower()
             label_lower = (field.label or "").lower()
 
-            is_standard = (
-                field.field_type in standard_types and
-                any(s in name_lower or s in label_lower for s in standard_names)
+            is_standard = field.field_type in standard_types and any(
+                s in name_lower or s in label_lower for s in standard_names
             )
 
             if is_standard:
@@ -245,8 +264,8 @@ class GenericStrategy(ATSStrategy):
             'button:has-text("Submit")',
             'button:has-text("Apply")',
             'button:has-text("Send")',
-            'button.submit',
-            '.submit-button',
+            "button.submit",
+            ".submit-button",
         ]
 
         for selector in submit_selectors:

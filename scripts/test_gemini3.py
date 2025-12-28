@@ -2,8 +2,11 @@
 """Test Gemini 3 Flash Preview model."""
 
 import sys
+
 from google import genai
+
 from src.config import settings
+
 
 def main():
     print("=" * 50)
@@ -19,8 +22,7 @@ def main():
     try:
         print("\nSending test prompt...")
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents="Respond with exactly: OK_GEMINI_3_WORKS"
+            model="gemini-3-flash-preview", contents="Respond with exactly: OK_GEMINI_3_WORKS"
         )
 
         result = response.text.strip()
@@ -30,12 +32,13 @@ def main():
             print("\n[OK] Gemini 3 Flash Preview is working correctly!")
             return 0
         else:
-            print(f"\n[?] Unexpected response, but model responded")
+            print("\n[?] Unexpected response, but model responded")
             return 0
 
     except Exception as e:
         print(f"\n[ERROR] {e}")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

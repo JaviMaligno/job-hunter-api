@@ -1,6 +1,5 @@
 """Job repository."""
 
-from typing import Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -31,7 +30,7 @@ class JobRepository(BaseRepository[Job]):
         status: JobStatus | None = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> Tuple[list[Job], int]:
+    ) -> tuple[list[Job], int]:
         """Get jobs for a user with optional status filter.
 
         Args:
@@ -101,7 +100,7 @@ class JobRepository(BaseRepository[Job]):
         min_match_score: int | None = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> Tuple[list[Job], int]:
+    ) -> tuple[list[Job], int]:
         """Search jobs with filters.
 
         Args:

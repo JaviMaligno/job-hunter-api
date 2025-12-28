@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WebSocketMessage:
     """Structured WebSocket message."""
+
     type: str  # status, intervention, progress, error
     payload: dict[str, Any]
     timestamp: datetime = field(default_factory=datetime.utcnow)
@@ -110,7 +111,7 @@ class ConnectionManager:
             if websocket in self._global_connections:
                 self._global_connections.remove(websocket)
 
-        logger.info(f"WebSocket disconnected")
+        logger.info("WebSocket disconnected")
 
     async def send_to_session(
         self,

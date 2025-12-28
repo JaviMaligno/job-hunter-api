@@ -87,7 +87,8 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         port = None
         if config.devtools_url:
             import re
-            port_match = re.search(r':(\d+)/?$', config.devtools_url)
+
+            port_match = re.search(r":(\d+)/?$", config.devtools_url)
             if port_match:
                 port = int(port_match.group(1))
             logger.info(f"Using Chrome DevTools at port {port} (from {config.devtools_url})")
@@ -121,7 +122,9 @@ class ChromeDevToolsAdapter(BrowserAdapter):
             List of element dicts with uid, role, name
         """
         result = await self.mcp.take_snapshot()
-        logger.debug(f"Snapshot raw result type: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'N/A'}")
+        logger.debug(
+            f"Snapshot raw result type: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'N/A'}"
+        )
 
         # Handle different result structures from MCP
         if isinstance(result, dict):
@@ -132,7 +135,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
                 content = result["content"]
                 if isinstance(content, list) and len(content) > 0:
                     first = content[0]
-                    self._cached_snapshot = getattr(first, 'text', str(first))
+                    self._cached_snapshot = getattr(first, "text", str(first))
                 else:
                     self._cached_snapshot = str(content)
             else:
@@ -140,7 +143,9 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         else:
             self._cached_snapshot = str(result) if result else ""
 
-        logger.debug(f"Snapshot content length: {len(self._cached_snapshot)}, first 500 chars: {self._cached_snapshot[:500]}")
+        logger.debug(
+            f"Snapshot content length: {len(self._cached_snapshot)}, first 500 chars: {self._cached_snapshot[:500]}"
+        )
         self._cached_elements = self._parse_snapshot(self._cached_snapshot)
         logger.info(f"Parsed {len(self._cached_elements)} elements from snapshot")
         return self._cached_elements
@@ -168,17 +173,17 @@ class ChromeDevToolsAdapter(BrowserAdapter):
             uid = match.group(1)
             role = match.group(2)
             name = match.group(3) or ""
-            elements.append({
-                "uid": uid,
-                "role": role,
-                "name": name,
-            })
+            elements.append(
+                {
+                    "uid": uid,
+                    "role": role,
+                    "name": name,
+                }
+            )
 
         return elements
 
-    def _find_element_by_role(
-        self, role: str, name_contains: str = ""
-    ) -> dict | None:
+    def _find_element_by_role(self, role: str, name_contains: str = "") -> dict | None:
         """Find element by role and optionally name.
 
         Args:
@@ -217,10 +222,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         Returns:
             List of matching element dicts
         """
-        return [
-            el for el in self._cached_elements
-            if el.get("role", "").lower() == role.lower()
-        ]
+        return [el for el in self._cached_elements if el.get("role", "").lower() == role.lower()]
 
     def _guess_role_from_selector(self, selector: str) -> tuple[str, str]:
         """Guess accessibility role from CSS selector.
@@ -261,7 +263,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
             return ("textbox", name_match.group(1))
 
         # Extract id hint
-        id_match = re.search(r'#([a-zA-Z0-9_-]+)', selector)
+        id_match = re.search(r"#([a-zA-Z0-9_-]+)", selector)
         if id_match:
             return ("", id_match.group(1))
 
@@ -312,7 +314,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
         start = time.time()
 
         try:
-            result = await self.mcp.navigate(request.url)
+            await self.mcp.navigate(request.url)
             duration = int((time.time() - start) * 1000)
 
             # Update cached URL/title
@@ -486,7 +488,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
             screenshot_text = result.get("text", "")
 
             # Extract base64 from markdown if present
-            base64_match = re.search(r'!\[.*?\]\(data:image/\w+;base64,([^)]+)\)', screenshot_text)
+            base64_match = re.search(r"!\[.*?\]\(data:image/\w+;base64,([^)]+)\)", screenshot_text)
             if base64_match:
                 screenshot_base64 = base64_match.group(1)
             else:
@@ -496,6 +498,7 @@ class ChromeDevToolsAdapter(BrowserAdapter):
             # Save to file if path provided
             if path and screenshot_base64:
                 import base64
+
                 with open(path, "wb") as f:
                     f.write(base64.b64decode(screenshot_base64))
 
@@ -565,9 +568,21 @@ class ChromeDevToolsAdapter(BrowserAdapter):
 
                 # Filter to form-like elements (expanded list for better form detection)
                 form_roles = (
-                    "textbox", "combobox", "checkbox", "radio", "button", "searchbox",
-                    "listbox", "spinbutton", "option", "slider", "switch", "menuitemcheckbox",
-                    "menuitemradio", "searchbox", "textarea"
+                    "textbox",
+                    "combobox",
+                    "checkbox",
+                    "radio",
+                    "button",
+                    "searchbox",
+                    "listbox",
+                    "spinbutton",
+                    "option",
+                    "slider",
+                    "switch",
+                    "menuitemcheckbox",
+                    "menuitemradio",
+                    "searchbox",
+                    "textarea",
                 )
                 if role.lower() in form_roles:
                     field_type = "text"
@@ -589,20 +604,22 @@ class ChromeDevToolsAdapter(BrowserAdapter):
                     elif role_lower == "textarea":
                         field_type = "textarea"
 
-                    form_fields.append(FormField(
-                        selector=f"[uid={uid}]",  # Use UID as selector
-                        field_id=uid,
-                        field_name=name,
-                        field_type=field_type,
-                        tag_name=role.lower(),
-                        label=name,
-                        placeholder=None,
-                        required=False,
-                        current_value=None,
-                        options=None,
-                        is_visible=True,
-                        is_enabled=True,
-                    ))
+                    form_fields.append(
+                        FormField(
+                            selector=f"[uid={uid}]",  # Use UID as selector
+                            field_id=uid,
+                            field_name=name,
+                            field_type=field_type,
+                            tag_name=role.lower(),
+                            label=name,
+                            placeholder=None,
+                            required=False,
+                            current_value=None,
+                            options=None,
+                            is_visible=True,
+                            is_enabled=True,
+                        )
+                    )
 
             logger.info(f"DOM found {len(form_fields)} form fields")
             return DOMResponse(

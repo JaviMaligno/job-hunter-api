@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm.attributes import flag_modified
 
 from src.api.dependencies import ClaudeDep, DbDep
-from src.integrations.claude.client import get_model_id
 from src.api.schemas import (
     EmailSender,
     EmailSenderPreferences,
@@ -21,6 +20,7 @@ from src.api.schemas import (
 )
 from src.config import DEFAULT_JOB_EMAIL_SENDERS
 from src.db.repositories.user import UserRepository
+from src.integrations.claude.client import get_model_id
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,9 @@ class QuestionAnswerRequest(BaseModel):
     company: str | None = Field(None, description="Company name for context")
     job_description: str | None = Field(None, description="Job description for context")
     max_words: int = Field(300, description="Target word count for answer")
-    tone: str = Field("professional", description="Tone: professional, enthusiastic, conversational")
+    tone: str = Field(
+        "professional", description="Tone: professional, enthusiastic, conversational"
+    )
     save_answer: bool = Field(False, description="Save this answer for future use")
 
 
@@ -418,11 +420,14 @@ async def update_email_sender_preferences(
 
     # Get current preferences or create new
     current_prefs = dict(user.preferences) if user.preferences else {}
-    email_prefs = current_prefs.get("email_senders", {
-        "senders": [],
-        "enabled_sender_ids": [],
-        "disabled_sender_ids": [],
-    })
+    email_prefs = current_prefs.get(
+        "email_senders",
+        {
+            "senders": [],
+            "enabled_sender_ids": [],
+            "disabled_sender_ids": [],
+        },
+    )
 
     # Track enabled/disabled sender IDs
     enabled_ids = set(email_prefs.get("enabled_sender_ids", []))
@@ -447,10 +452,7 @@ async def update_email_sender_preferences(
                 custom_senders.append(sender_dict)
 
     if updates.remove_sender_ids:
-        custom_senders = [
-            s for s in custom_senders
-            if s.get("id") not in updates.remove_sender_ids
-        ]
+        custom_senders = [s for s in custom_senders if s.get("id") not in updates.remove_sender_ids]
 
     # Update preferences
     email_prefs["enabled_sender_ids"] = list(enabled_ids)

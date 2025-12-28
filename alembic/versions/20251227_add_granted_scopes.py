@@ -5,9 +5,10 @@ Revises: 20251217_add_auth_tables
 Create Date: 2025-12-27
 
 """
-from alembic import op
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c9d0e1f2a3b4"

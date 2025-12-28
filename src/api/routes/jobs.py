@@ -256,6 +256,7 @@ async def adapt_cv_for_job(
     Requires X-Anthropic-Api-Key header or configured ANTHROPIC_API_KEY.
     """
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info("CV adapt endpoint called")
 

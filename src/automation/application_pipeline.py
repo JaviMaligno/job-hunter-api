@@ -14,21 +14,21 @@ import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
 # Configure detailed logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("application_pipeline")
 
 
 class ApplicationResult(str, Enum):
     """Result of an application attempt."""
+
     SUCCESS = "success"  # Application submitted
     PAUSED = "paused"  # Paused for review before submit
     BLOCKED = "blocked"  # Hit a blocker (CAPTCHA, login, etc.)
@@ -39,6 +39,7 @@ class ApplicationResult(str, Enum):
 
 class ApplicationAttempt(BaseModel):
     """Record of a single application attempt."""
+
     job_id: str
     job_url: str
     job_title: str
@@ -55,6 +56,7 @@ class ApplicationAttempt(BaseModel):
 
 class PipelineReport(BaseModel):
     """Summary report of pipeline execution."""
+
     started_at: str
     completed_at: str | None = None
     total_jobs: int = 0
@@ -123,6 +125,7 @@ class ApplicationPipeline:
     async def _get_http_client(self):
         """Get HTTP client."""
         import httpx
+
         return httpx.AsyncClient(timeout=300.0)
 
     async def load_user_data(self) -> bool:
@@ -154,7 +157,9 @@ class ApplicationPipeline:
                 }
                 self._cv_content = user.get("base_cv_content", "")
 
-                logger.info(f"Loaded user: {self._user_data['first_name']} {self._user_data['last_name']}")
+                logger.info(
+                    f"Loaded user: {self._user_data['first_name']} {self._user_data['last_name']}"
+                )
 
                 # Check if LinkedIn is connected
                 try:
@@ -165,7 +170,9 @@ class ApplicationPipeline:
                         linkedin_status = linkedin_response.json()
                         self._has_linkedin_session = linkedin_status.get("connected", False)
                         if self._has_linkedin_session:
-                            logger.info("LinkedIn connected - will attempt LinkedIn job applications")
+                            logger.info(
+                                "LinkedIn connected - will attempt LinkedIn job applications"
+                            )
                         else:
                             logger.info("LinkedIn not connected - LinkedIn jobs will be skipped")
                 except Exception as e:
@@ -198,7 +205,7 @@ class ApplicationPipeline:
                             "user_id": self.user_id,
                             "status": status,
                             "page_size": 50,
-                        }
+                        },
                     )
                     if response.status_code == 200:
                         data = response.json()
@@ -233,10 +240,10 @@ class ApplicationPipeline:
         job_title = job.get("title", "Unknown")
         company = job.get("company")
 
-        logger.info(f"=" * 60)
+        logger.info("=" * 60)
         logger.info(f"Applying to: {job_title} at {company or 'Unknown'}")
         logger.info(f"URL: {job_url}")
-        logger.info(f"=" * 60)
+        logger.info("=" * 60)
 
         attempt = ApplicationAttempt(
             job_id=job_id,
@@ -279,10 +286,14 @@ class ApplicationPipeline:
                 else:
                     result = response.json()
                     attempt.session_id = result.get("session_id")
-                    attempt.fields_filled = {
-                        f.get("field_name", "unknown"): f.get("value", "")
-                        for f in result.get("fields_filled", [])
-                    } if isinstance(result.get("fields_filled"), list) else result.get("fields_filled", {})
+                    attempt.fields_filled = (
+                        {
+                            f.get("field_name", "unknown"): f.get("value", "")
+                            for f in result.get("fields_filled", [])
+                        }
+                        if isinstance(result.get("fields_filled"), list)
+                        else result.get("fields_filled", {})
+                    )
 
                     # Determine result based on status
                     status = result.get("status", "failed")
@@ -291,15 +302,18 @@ class ApplicationPipeline:
 
                     if status == "submitted":
                         attempt.result = ApplicationResult.SUCCESS
-                        logger.info(f"✅ SUCCESS: Application submitted!")
+                        logger.info("✅ SUCCESS: Application submitted!")
                     elif status == "paused":
                         attempt.result = ApplicationResult.PAUSED
-                        logger.info(f"⏸️ PAUSED: Ready for review")
+                        logger.info("⏸️ PAUSED: Ready for review")
                     elif status == "needs_intervention":
                         attempt.result = ApplicationResult.BLOCKED
                         attempt.blocker_type = blocker
                         attempt.blocker_message = blocker_details
-                        if "no longer" in (blocker_details or "").lower() or "closed" in (blocker_details or "").lower():
+                        if (
+                            "no longer" in (blocker_details or "").lower()
+                            or "closed" in (blocker_details or "").lower()
+                        ):
                             attempt.result = ApplicationResult.JOB_CLOSED
                             logger.warning(f"🚫 JOB CLOSED: {blocker_details}")
                         else:
@@ -313,7 +327,11 @@ class ApplicationPipeline:
                     if attempt.fields_filled:
                         logger.info(f"Fields filled: {len(attempt.fields_filled)}")
                         for field, value in attempt.fields_filled.items():
-                            logger.debug(f"  - {field}: {value[:50]}..." if len(str(value)) > 50 else f"  - {field}: {value}")
+                            logger.debug(
+                                f"  - {field}: {value[:50]}..."
+                                if len(str(value)) > 50
+                                else f"  - {field}: {value}"
+                            )
 
                 # Update job status in database
                 await self._update_job_status(client, job_id, attempt)
@@ -432,10 +450,12 @@ class ApplicationPipeline:
             jobs = await self.get_jobs_to_apply()
 
         # Filter out already applied/blocked
-        jobs = [j for j in jobs if j.get("status") not in ["applied", "blocked", "rejected", "archived"]]
+        jobs = [
+            j for j in jobs if j.get("status") not in ["applied", "blocked", "rejected", "archived"]
+        ]
 
         # Limit to max_applications
-        jobs = jobs[:self.max_applications]
+        jobs = jobs[: self.max_applications]
         self.report.total_jobs = len(jobs)
 
         logger.info(f"Processing {len(jobs)} jobs")

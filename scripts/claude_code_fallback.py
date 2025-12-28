@@ -20,7 +20,6 @@ Usage:
 
 import argparse
 import asyncio
-import json
 import os
 import subprocess
 import sys
@@ -28,12 +27,13 @@ from pathlib import Path
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -66,9 +66,7 @@ async def get_session_context(session_id: str) -> dict | None:
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(
-                f"{api_url}/api/applications/v2/sessions/{session_id}"
-            )
+            response = await client.get(f"{api_url}/api/applications/v2/sessions/{session_id}")
             if response.status_code == 200:
                 return response.json()
             else:
@@ -175,7 +173,7 @@ def launch_claude_code(context_file: Path, url: str | None = None):
         result = subprocess.run(
             ["where", "claude"] if sys.platform == "win32" else ["which", "claude"],
             capture_output=True,
-            text=True
+            text=True,
         )
         if result.returncode != 0:
             print("Claude Code CLI not found. Please install it first:")
@@ -191,7 +189,9 @@ def launch_claude_code(context_file: Path, url: str | None = None):
     cmd = ["claude"]
 
     # Add initial prompt
-    initial_prompt = f"Please read the context file at {context_file} and help me complete this task."
+    initial_prompt = (
+        f"Please read the context file at {context_file} and help me complete this task."
+    )
     if url:
         initial_prompt += f" The target URL is {url}"
 
@@ -210,13 +210,10 @@ def launch_claude_code(context_file: Path, url: str | None = None):
         if sys.platform == "win32":
             subprocess.run(
                 ["cmd", "/c", "start", "cmd", "/k", "claude", "--print", initial_prompt],
-                cwd=context_file.parent
+                cwd=context_file.parent,
             )
         else:
-            subprocess.run(
-                ["claude", "--print", initial_prompt],
-                cwd=context_file.parent
-            )
+            subprocess.run(["claude", "--print", initial_prompt], cwd=context_file.parent)
         return True
     except Exception as e:
         print(f"Failed to launch Claude Code: {e}")
@@ -233,7 +230,7 @@ async def resolve_intervention(intervention_id: str):
         try:
             response = await client.post(
                 f"{api_url}/api/applications/v2/interventions/{intervention_id}/resolve",
-                json={"action": "continue", "notes": "Resolved via Claude Code CLI"}
+                json={"action": "continue", "notes": "Resolved via Claude Code CLI"},
             )
             if response.status_code == 200:
                 print(f"Intervention {intervention_id} marked as resolved")
@@ -251,37 +248,25 @@ async def main():
         description="Claude Code CLI Fallback for job application interventions"
     )
 
+    parser.add_argument("--intervention", "-i", help="Intervention ID to resolve")
+    parser.add_argument("--session", "-s", help="Session ID to resume")
+    parser.add_argument("--url", "-u", help="Direct URL for manual application")
     parser.add_argument(
-        "--intervention", "-i",
-        help="Intervention ID to resolve"
-    )
-    parser.add_argument(
-        "--session", "-s",
-        help="Session ID to resume"
-    )
-    parser.add_argument(
-        "--url", "-u",
-        help="Direct URL for manual application"
-    )
-    parser.add_argument(
-        "--task", "-t",
+        "--task",
+        "-t",
         default="Complete the job application",
-        help="Task description for direct URL mode"
+        help="Task description for direct URL mode",
     )
-    parser.add_argument(
-        "--output", "-o",
-        default=".",
-        help="Output directory for context file"
-    )
+    parser.add_argument("--output", "-o", default=".", help="Output directory for context file")
     parser.add_argument(
         "--no-launch",
         action="store_true",
-        help="Don't launch Claude Code, just generate context file"
+        help="Don't launch Claude Code, just generate context file",
     )
     parser.add_argument(
         "--resolve-after",
         action="store_true",
-        help="Mark intervention as resolved after Claude Code exits"
+        help="Mark intervention as resolved after Claude Code exits",
     )
 
     args = parser.parse_args()

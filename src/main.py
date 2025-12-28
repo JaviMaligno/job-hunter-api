@@ -1,7 +1,7 @@
 """FastAPI application entry point."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,12 +11,19 @@ from src.config import settings
 # Try to import langfuse tracing, but make it optional
 try:
     from src.integrations.langfuse.tracing import flush_langfuse, init_langfuse, shutdown_langfuse
+
     LANGFUSE_AVAILABLE = True
 except Exception:
     LANGFUSE_AVAILABLE = False
-    def init_langfuse(): pass
-    def flush_langfuse(): pass
-    def shutdown_langfuse(): pass
+
+    def init_langfuse():
+        pass
+
+    def flush_langfuse():
+        pass
+
+    def shutdown_langfuse():
+        pass
 
 
 @asynccontextmanager
@@ -40,10 +47,11 @@ app = FastAPI(
 )
 
 # Global exception handler to log unhandled errors
-from fastapi import Request
-from fastapi.responses import JSONResponse
 import logging
 import traceback
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -103,6 +111,7 @@ async def health():
 # Test WebSocket endpoint (for debugging 403 issue)
 from fastapi import WebSocket
 
+
 @app.websocket("/ws/test")
 async def websocket_test(websocket: WebSocket):
     """Simple test WebSocket endpoint."""
@@ -125,4 +134,3 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
 app.include_router(gmail.router, prefix="/api/gmail", tags=["gmail"])
 app.include_router(linkedin.router, prefix="/api/linkedin", tags=["linkedin"])
-

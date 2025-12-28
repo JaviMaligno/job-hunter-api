@@ -3,9 +3,7 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
-from src.config import Environment, Settings, get_settings
+from src.config import Environment, Settings
 
 
 class TestSettings:

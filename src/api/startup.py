@@ -22,9 +22,7 @@ async def recover_interrupted_applications():
         try:
             # Find applications that were interrupted
             query = select(Application).where(
-                Application.status.in_(
-                    [ApplicationStatus.IN_PROGRESS, ApplicationStatus.PENDING]
-                )
+                Application.status.in_([ApplicationStatus.IN_PROGRESS, ApplicationStatus.PENDING])
             )
 
             result = await db.execute(query)
@@ -32,8 +30,7 @@ async def recover_interrupted_applications():
 
             if interrupted:
                 logger.warning(
-                    f"Found {len(interrupted)} interrupted applications. "
-                    "Marking as FAILED."
+                    f"Found {len(interrupted)} interrupted applications. " "Marking as FAILED."
                 )
 
                 for app in interrupted:
@@ -59,7 +56,6 @@ async def cleanup_old_sessions():
     Args:
         max_age_days: Maximum age in days for keeping sessions
     """
-    from datetime import datetime, timedelta
 
     logger.info("Session cleanup task started")
 

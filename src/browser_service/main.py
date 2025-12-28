@@ -8,8 +8,9 @@ Run with:
 """
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Annotated, AsyncGenerator
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -351,11 +352,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
             data = await websocket.receive_text()
 
             # Echo back for now - can be extended for bidirectional communication
-            await websocket.send_json({
-                "type": "ack",
-                "session_id": session_id,
-                "message": data,
-            })
+            await websocket.send_json(
+                {
+                    "type": "ack",
+                    "session_id": session_id,
+                    "message": data,
+                }
+            )
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for session {session_id}")
     except Exception as e:

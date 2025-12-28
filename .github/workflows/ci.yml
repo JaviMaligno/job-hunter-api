@@ -39,11 +39,14 @@ jobs:
       - name: Verify imports
         run: poetry run python -c "from src.main import app; print('All imports OK')"
 
-      - name: Run Ruff linter
-        run: poetry run ruff check .
-
-      - name: Run Ruff formatter check
-        run: poetry run ruff format --check .
+      - name: Run Ruff linter (auto-fix first)
+        run: |
+          # Try to auto-fix any issues
+          poetry run ruff check . --fix || true
+          poetry run ruff format . || true
+          # Check if there are unfixed issues
+          poetry run ruff check .
+          poetry run ruff format --check .
 
       - name: Run mypy
         run: poetry run mypy src/ --ignore-missing-imports

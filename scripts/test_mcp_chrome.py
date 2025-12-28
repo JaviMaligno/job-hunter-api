@@ -27,11 +27,13 @@ def parse_snapshot_for_elements(snapshot_text: str) -> list[dict]:
         uid = match.group(1)
         role = match.group(2)
         name = match.group(3) or ""
-        elements.append({
-            "uid": uid,
-            "role": role,
-            "name": name,
-        })
+        elements.append(
+            {
+                "uid": uid,
+                "role": role,
+                "name": name,
+            }
+        )
 
     return elements
 
@@ -99,7 +101,7 @@ async def test_mcp_connection():
             link_el = find_element_by_role(elements, "link")
             if link_el:
                 logger.info(f"\nFound link: uid={link_el['uid']} '{link_el['name']}'")
-                click_result = await chrome.click(link_el['uid'])
+                click_result = await chrome.click(link_el["uid"])
                 logger.info(f"Click result: {click_result}")
 
                 # Wait for navigation
@@ -142,17 +144,26 @@ async def test_mcp_connection():
             for role, els in sorted(roles.items()):
                 logger.info(f"  {role}: {len(els)} elements")
                 for el in els[:2]:
-                    logger.info(f"    - uid={el['uid']} \"{el['name'][:50]}...\"" if len(el['name']) > 50 else f"    - uid={el['uid']} \"{el['name']}\"")
+                    logger.info(
+                        f"    - uid={el['uid']} \"{el['name'][:50]}...\""
+                        if len(el["name"]) > 50
+                        else f"    - uid={el['uid']} \"{el['name']}\""
+                    )
 
             # Find search box (combobox or textbox with "search" in name)
-            search_candidates = [el for el in google_elements
-                                if el.get("role", "").lower() in ("combobox", "textbox", "searchbox")
-                                or "search" in el.get("name", "").lower()]
+            search_candidates = [
+                el
+                for el in google_elements
+                if el.get("role", "").lower() in ("combobox", "textbox", "searchbox")
+                or "search" in el.get("name", "").lower()
+            ]
             logger.info(f"\nSearch candidates: {search_candidates}")
 
             if search_candidates:
                 search_box = search_candidates[0]
-                logger.info(f"Using search box: uid={search_box['uid']} {search_box['role']}: \"{search_box['name']}\"")
+                logger.info(
+                    f"Using search box: uid={search_box['uid']} {search_box['role']}: \"{search_box['name']}\""
+                )
 
                 # Fill the search box
                 logger.info("Filling search box with 'MCP browser automation'...")
@@ -170,6 +181,7 @@ async def test_mcp_connection():
     except Exception as e:
         logger.error(f"MCP test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

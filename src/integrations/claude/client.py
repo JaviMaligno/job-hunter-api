@@ -1,6 +1,6 @@
 """Claude SDK client wrapper with observability - supports both Anthropic API and AWS Bedrock."""
 
-from typing import Any, Union
+from typing import Any
 
 from anthropic import Anthropic, AnthropicBedrock
 
@@ -9,20 +9,26 @@ from src.config import settings
 # Try to import langfuse, but make it optional to avoid blocking
 try:
     from langfuse.decorators import langfuse_context, observe
+
     LANGFUSE_AVAILABLE = True
 except Exception:
     LANGFUSE_AVAILABLE = False
+
     # Dummy decorator when langfuse is not available
     def observe(as_type=None):
         def decorator(func):
             return func
+
         return decorator
+
     class DummyContext:
-        def update_current_observation(self, **kwargs): pass
+        def update_current_observation(self, **kwargs):
+            pass
+
     langfuse_context = DummyContext()
 
 # Type alias for client types
-ClaudeClient = Union[Anthropic, AnthropicBedrock]
+ClaudeClient = Anthropic | AnthropicBedrock
 
 
 def get_claude_client(api_key: str | None = None) -> ClaudeClient:

@@ -5,18 +5,25 @@ import enum
 import logging
 from datetime import datetime
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
 
 from src.agents.form_filler import FormFillerAgent, FormFillerInput, FormFillerOutput
+from src.api.dependencies import ClaudeDep
+from src.api.websocket_manager import WebSocketMessage, get_connection_manager
+from src.automation.models import UserFormData
+from src.automation.session_store import SessionState, get_session_store
 from src.browser_service.models import BrowserMode
 from src.config import settings
-from src.api.dependencies import ClaudeDep
-from src.api.websocket_manager import get_connection_manager, WebSocketMessage
-from src.automation.models import UserFormData
-from src.automation.session_store import get_session_store, SessionState
 from src.db.models import ApplicationMode, ApplicationStatus, BlockerType
 
 # Gemini orchestrator imports (optional)
@@ -25,15 +32,17 @@ try:
         GeminiOrchestratorAgent,
         OrchestratorInput,
         OrchestratorOutput,
+    )
+    from src.agents.gemini_orchestrator import (
         UserFormData as GeminiUserFormData,
     )
     from src.automation.intervention_manager import (
-        InterventionManager,
         InterventionRequest,
         InterventionResolution,
         InterventionType,
         get_intervention_manager,
     )
+
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -454,13 +463,15 @@ async def websocket_application_updates(websocket: WebSocket, session_id: str):
 
     try:
         # Send initial status
-        await websocket.send_json({
-            "type": "status",
-            "session_id": session_id,
-            "status": session.status.value,
-            "current_step": session.current_step,
-            "fields_filled": len(session.fields_filled),
-        })
+        await websocket.send_json(
+            {
+                "type": "status",
+                "session_id": session_id,
+                "status": session.status.value,
+                "current_step": session.current_step,
+                "fields_filled": len(session.fields_filled),
+            }
+        )
 
         # Keep connection alive and handle client messages
         while True:
@@ -470,19 +481,25 @@ async def websocket_application_updates(websocket: WebSocket, session_id: str):
             if data == "status":
                 session = _application_sessions.get(session_id)
                 if session:
-                    await websocket.send_json({
-                        "type": "status",
-                        "session_id": session_id,
-                        "status": session.status.value,
-                        "current_step": session.current_step,
-                        "fields_filled": len(session.fields_filled),
-                        "blocker_type": session.blocker_type.value if session.blocker_type else None,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "status",
+                            "session_id": session_id,
+                            "status": session.status.value,
+                            "current_step": session.current_step,
+                            "fields_filled": len(session.fields_filled),
+                            "blocker_type": session.blocker_type.value
+                            if session.blocker_type
+                            else None,
+                        }
+                    )
             else:
-                await websocket.send_json({
-                    "type": "ack",
-                    "message": data,
-                })
+                await websocket.send_json(
+                    {
+                        "type": "ack",
+                        "message": data,
+                    }
+                )
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for application {session_id}")
@@ -497,6 +514,7 @@ async def websocket_application_updates(websocket: WebSocket, session_id: str):
 
 class AgentType(str, enum.Enum):
     """Available automation agents."""
+
     GEMINI = "gemini"  # Gemini 2.5 + Chrome MCP
     CLAUDE = "claude"  # Claude FormFillerAgent
     HYBRID = "hybrid"  # Gemini with Claude fallback
@@ -504,6 +522,7 @@ class AgentType(str, enum.Enum):
 
 class StartApplicationV2Request(BaseModel):
     """Request to start a job application with orchestrator."""
+
     job_url: str
     user_data: UserFormData
     cv_content: str
@@ -513,12 +532,15 @@ class StartApplicationV2Request(BaseModel):
     agent: AgentType = AgentType.GEMINI  # Which agent to use
     auto_solve_captcha: bool = True  # Auto-solve CAPTCHAs if possible
     gemini_model: str | None = None  # Optional: override Gemini model
-    browser_mode: str | None = None  # Browser mode: chrome-devtools or playwright (defaults to config)
+    browser_mode: str | None = (
+        None  # Browser mode: chrome-devtools or playwright (defaults to config)
+    )
     devtools_url: str | None = None  # Chrome DevTools URL for chrome-devtools mode
 
 
 class ApplicationV2Response(BaseModel):
     """Response from v2 application endpoint."""
+
     session_id: str
     status: str
     success: bool
@@ -536,6 +558,7 @@ class ApplicationV2Response(BaseModel):
 
 class InterventionResponse(BaseModel):
     """Response with intervention details."""
+
     id: str
     session_id: str
     intervention_type: str
@@ -550,6 +573,7 @@ class InterventionResponse(BaseModel):
 
 class ResolveInterventionRequest(BaseModel):
     """Request to resolve an intervention."""
+
     action: str  # continue, submit, cancel, retry
     notes: str | None = None
     close_browser: bool = True  # Whether to close the browser session
@@ -557,6 +581,7 @@ class ResolveInterventionRequest(BaseModel):
 
 class SessionSummary(BaseModel):
     """Summary of a session for listing."""
+
     session_id: str
     job_url: str
     status: str
@@ -569,6 +594,7 @@ class SessionSummary(BaseModel):
 
 class ResumeSessionRequest(BaseModel):
     """Request to resume a paused session."""
+
     restore_browser: bool = True  # Restore cookies/state
     auto_solve_captcha: bool = True
 
@@ -597,7 +623,7 @@ async def start_application_v2(
         if request.agent == AgentType.GEMINI:
             raise HTTPException(
                 status_code=501,
-                detail="Gemini orchestrator not available. Use agent=claude or check dependencies."
+                detail="Gemini orchestrator not available. Use agent=claude or check dependencies.",
             )
         # For hybrid, fall back to Claude
         request.agent = AgentType.CLAUDE
@@ -665,8 +691,7 @@ async def start_application_v2(
 
             try:
                 agent = GeminiOrchestratorAgent(
-                    model=request.gemini_model,
-                    auto_solve_captcha=request.auto_solve_captcha
+                    model=request.gemini_model, auto_solve_captcha=request.auto_solve_captcha
                 )
                 result = await agent.run(orchestrator_input)
             except Exception as gemini_error:
@@ -682,7 +707,11 @@ async def start_application_v2(
             # Claude FormFillerAgent
             # Parse browser mode from request, defaulting to config
             effective_browser_mode = request.browser_mode or settings.default_browser_mode
-            browser_mode = BrowserMode.CHROME_DEVTOOLS if effective_browser_mode == "chrome-devtools" else BrowserMode.PLAYWRIGHT
+            browser_mode = (
+                BrowserMode.CHROME_DEVTOOLS
+                if effective_browser_mode == "chrome-devtools"
+                else BrowserMode.PLAYWRIGHT
+            )
 
             filler_input = FormFillerInput(
                 application_url=request.job_url,
@@ -701,7 +730,11 @@ async def start_application_v2(
             claude_result: FormFillerOutput = await claude_agent.run(filler_input)
 
             # Convert Claude result to OrchestratorOutput format for unified handling
-            from src.agents.gemini_orchestrator import OrchestratorOutput, FieldFilled, BlockerDetected
+            from src.agents.gemini_orchestrator import (
+                BlockerDetected,
+                FieldFilled,
+                OrchestratorOutput,
+            )
 
             # Create blocker if detected
             blocker = None
@@ -715,16 +748,22 @@ async def start_application_v2(
                     blocker_type=blocker_type_map.get(claude_result.blocker_detected, "other"),
                     description=claude_result.blocker_details or "Blocker detected",
                     screenshot_path=claude_result.screenshot_path,
-                    captcha_subtype="recaptcha" if claude_result.blocker_detected == BlockerType.CAPTCHA else None,
+                    captcha_subtype="recaptcha"
+                    if claude_result.blocker_detected == BlockerType.CAPTCHA
+                    else None,
                 )
 
             result = OrchestratorOutput(
                 success=claude_result.status == ApplicationStatus.SUBMITTED,
                 status=(
-                    "completed" if claude_result.status == ApplicationStatus.SUBMITTED
-                    else "paused" if claude_result.status == ApplicationStatus.PAUSED
-                    else "needs_intervention" if claude_result.status == ApplicationStatus.NEEDS_INTERVENTION
-                    else "failed" if claude_result.status == ApplicationStatus.FAILED
+                    "completed"
+                    if claude_result.status == ApplicationStatus.SUBMITTED
+                    else "paused"
+                    if claude_result.status == ApplicationStatus.PAUSED
+                    else "needs_intervention"
+                    if claude_result.status == ApplicationStatus.NEEDS_INTERVENTION
+                    else "failed"
+                    if claude_result.status == ApplicationStatus.FAILED
                     else "in_progress"
                 ),
                 steps_completed=[f"Step {i}" for i in range(1, claude_result.current_step + 1)],
@@ -740,10 +779,14 @@ async def start_application_v2(
 
         # Update session
         session.status = (
-            ApplicationStatus.PAUSED if result.status == "paused"
-            else ApplicationStatus.SUBMITTED if result.status == "completed"
-            else ApplicationStatus.NEEDS_INTERVENTION if result.status == "needs_intervention"
-            else ApplicationStatus.FAILED if result.status == "failed"
+            ApplicationStatus.PAUSED
+            if result.status == "paused"
+            else ApplicationStatus.SUBMITTED
+            if result.status == "completed"
+            else ApplicationStatus.NEEDS_INTERVENTION
+            if result.status == "needs_intervention"
+            else ApplicationStatus.FAILED
+            if result.status == "failed"
             else ApplicationStatus.IN_PROGRESS
         )
         session.fields_filled = {f.field_name: f.value for f in result.fields_filled}
@@ -755,7 +798,11 @@ async def start_application_v2(
                 session.browser_session_id = claude_result.browser_session_id
 
         if result.blocker:
-            session.blocker_type = BlockerType.CAPTCHA if result.blocker.blocker_type == "captcha" else BlockerType.NONE
+            session.blocker_type = (
+                BlockerType.CAPTCHA
+                if result.blocker.blocker_type == "captcha"
+                else BlockerType.NONE
+            )
             session.blocker_message = result.blocker.description
 
         if result.error_message:
@@ -787,7 +834,11 @@ async def start_application_v2(
             intervention_manager = get_intervention_manager()
 
             # Map blocker type to intervention type
-            int_type = InterventionType.CAPTCHA if result.blocker.blocker_type == "captcha" else InterventionType.OTHER
+            int_type = (
+                InterventionType.CAPTCHA
+                if result.blocker.blocker_type == "captcha"
+                else InterventionType.OTHER
+            )
 
             intervention = await intervention_manager.request_intervention(
                 session_id=session_id,
@@ -798,7 +849,9 @@ async def start_application_v2(
                 instructions="Please resolve this manually using Claude Code CLI",
                 current_url=result.final_url,
                 captcha_type=result.blocker.captcha_subtype,
-                captcha_solve_attempted=result.captcha_info.attempted if result.captcha_info else False,
+                captcha_solve_attempted=result.captcha_info.attempted
+                if result.captcha_info
+                else False,
                 captcha_solve_error=result.captcha_info.error if result.captcha_info else None,
             )
 
@@ -833,6 +886,7 @@ async def start_application_v2(
     except Exception as e:
         logger.error(f"V2 Application failed: {e}")
         import traceback
+
         traceback.print_exc()
 
         session.status = ApplicationStatus.FAILED
@@ -933,16 +987,21 @@ async def resolve_intervention(
 
     # Close browser session if requested and action is "continue" (Done)
     browser_closed = False
-    logger.info(f"Resolve intervention: action={request.action}, close_browser={request.close_browser}")
+    logger.info(
+        f"Resolve intervention: action={request.action}, close_browser={request.close_browser}"
+    )
     if request.close_browser and request.action == "continue":
         session_store = get_session_store()
         session = await session_store.load(intervention.session_id)
-        logger.info(f"Session loaded: {session.session_id if session else 'None'}, browser_session_id={session.browser_session_id if session else 'N/A'}")
+        logger.info(
+            f"Session loaded: {session.session_id if session else 'None'}, browser_session_id={session.browser_session_id if session else 'N/A'}"
+        )
         if session and session.browser_session_id:
             # Fire and forget - close browser in background to avoid blocking
             async def close_browser_background(browser_session_id: str):
                 try:
                     from src.automation.client import BrowserServiceClient
+
                     async with BrowserServiceClient() as client:
                         await client.close_session_by_id(browser_session_id, timeout=30.0)
                     logger.info(f"Background: Closed browser session {browser_session_id}")
@@ -984,7 +1043,8 @@ async def list_v2_sessions(
             fields_filled=len(s.fields_filled),
             created_at=s.created_at,
             paused_at=s.paused_at,
-            can_resume=s.status in [
+            can_resume=s.status
+            in [
                 ApplicationStatus.PAUSED,
                 ApplicationStatus.NEEDS_INTERVENTION,
             ],
@@ -1005,7 +1065,9 @@ async def get_v2_session(session_id: str):
     return {
         "session_id": session.session_id,
         "job_url": session.job_url,
-        "status": session.status.value if isinstance(session.status, ApplicationStatus) else session.status,
+        "status": session.status.value
+        if isinstance(session.status, ApplicationStatus)
+        else session.status,
         "mode": session.mode.value if isinstance(session.mode, ApplicationMode) else session.mode,
         "current_step": session.current_step,
         "total_steps": session.total_steps,
@@ -1021,7 +1083,8 @@ async def get_v2_session(session_id: str):
         "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),
         "paused_at": session.paused_at.isoformat() if session.paused_at else None,
-        "can_resume": session.status in [
+        "can_resume": session.status
+        in [
             ApplicationStatus.PAUSED,
             ApplicationStatus.NEEDS_INTERVENTION,
         ],
@@ -1060,6 +1123,7 @@ async def resume_v2_session(
     user_data = None
     if session.user_data_json:
         import json
+
         user_data_dict = json.loads(session.user_data_json)
         user_data = GeminiUserFormData(**user_data_dict)
 
@@ -1093,11 +1157,13 @@ async def resume_v2_session(
             "timestamp": datetime.utcnow().isoformat(),
         },
     )
-    await ws_manager.broadcast_global({
-        "type": "session_resumed",
-        "payload": {"session_id": session_id, "status": "in_progress"},
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    await ws_manager.broadcast_global(
+        {
+            "type": "session_resumed",
+            "payload": {"session_id": session_id, "status": "in_progress"},
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
 
     # Run orchestrator in background
     async def run_resume_task():
@@ -1105,7 +1171,6 @@ async def resume_v2_session(
         try:
             result = None
             use_claude_fallback = False
-            agent_used = "gemini"
 
             # First try Gemini
             try:
@@ -1124,9 +1189,7 @@ async def resume_v2_session(
                 )
 
                 # Run orchestrator
-                agent = GeminiOrchestratorAgent(
-                    auto_solve_captcha=request.auto_solve_captcha
-                )
+                agent = GeminiOrchestratorAgent(auto_solve_captcha=request.auto_solve_captcha)
                 result = await agent.run(orchestrator_input)
             except Exception as gemini_error:
                 logger.warning(f"Gemini agent failed during resume: {gemini_error}")
@@ -1135,14 +1198,13 @@ async def resume_v2_session(
             # Fallback to Claude if Gemini failed
             if use_claude_fallback:
                 logger.info("Falling back to Claude FormFillerAgent for resume")
-                agent_used = "claude_fallback"
 
                 # Convert user data for Claude agent
                 claude_user_data = UserFormData(
                     first_name=user_data.first_name,
                     last_name=user_data.last_name,
                     email=user_data.email,
-                    phone=user_data.phone if hasattr(user_data, 'phone') else "",
+                    phone=user_data.phone if hasattr(user_data, "phone") else "",
                 )
 
                 filler_input = FormFillerInput(
@@ -1161,7 +1223,7 @@ async def resume_v2_session(
                 claude_result: FormFillerOutput = await claude_agent.run(filler_input)
 
                 # Convert Claude result to OrchestratorOutput format
-                from src.agents.gemini_orchestrator import FieldFilled, BlockerDetected
+                from src.agents.gemini_orchestrator import BlockerDetected, FieldFilled
 
                 blocker = None
                 if claude_result.blocker_detected:
@@ -1174,16 +1236,22 @@ async def resume_v2_session(
                         blocker_type=blocker_type_map.get(claude_result.blocker_detected, "other"),
                         description=claude_result.blocker_details or "Blocker detected",
                         screenshot_path=claude_result.screenshot_path,
-                        captcha_subtype="recaptcha" if claude_result.blocker_detected == BlockerType.CAPTCHA else None,
+                        captcha_subtype="recaptcha"
+                        if claude_result.blocker_detected == BlockerType.CAPTCHA
+                        else None,
                     )
 
                 result = OrchestratorOutput(
                     success=claude_result.status == ApplicationStatus.SUBMITTED,
                     status=(
-                        "completed" if claude_result.status == ApplicationStatus.SUBMITTED
-                        else "paused" if claude_result.status == ApplicationStatus.PAUSED
-                        else "needs_intervention" if claude_result.status == ApplicationStatus.NEEDS_INTERVENTION
-                        else "failed" if claude_result.status == ApplicationStatus.FAILED
+                        "completed"
+                        if claude_result.status == ApplicationStatus.SUBMITTED
+                        else "paused"
+                        if claude_result.status == ApplicationStatus.PAUSED
+                        else "needs_intervention"
+                        if claude_result.status == ApplicationStatus.NEEDS_INTERVENTION
+                        else "failed"
+                        if claude_result.status == ApplicationStatus.FAILED
                         else "in_progress"
                     ),
                     steps_completed=[f"Step {i}" for i in range(1, claude_result.current_step + 1)],
@@ -1204,10 +1272,14 @@ async def resume_v2_session(
                 return
 
             new_status = (
-                ApplicationStatus.PAUSED if result.status == "paused"
-                else ApplicationStatus.SUBMITTED if result.status == "completed"
-                else ApplicationStatus.NEEDS_INTERVENTION if result.status == "needs_intervention"
-                else ApplicationStatus.FAILED if result.status == "failed"
+                ApplicationStatus.PAUSED
+                if result.status == "paused"
+                else ApplicationStatus.SUBMITTED
+                if result.status == "completed"
+                else ApplicationStatus.NEEDS_INTERVENTION
+                if result.status == "needs_intervention"
+                else ApplicationStatus.FAILED
+                if result.status == "failed"
                 else ApplicationStatus.IN_PROGRESS
             )
 
@@ -1229,7 +1301,11 @@ async def resume_v2_session(
             # Handle intervention if needed
             if result.status == "needs_intervention" and result.blocker:
                 intervention_manager = get_intervention_manager()
-                int_type = InterventionType.CAPTCHA if result.blocker.blocker_type == "captcha" else InterventionType.OTHER
+                int_type = (
+                    InterventionType.CAPTCHA
+                    if result.blocker.blocker_type == "captcha"
+                    else InterventionType.OTHER
+                )
 
                 intervention = await intervention_manager.request_intervention(
                     session_id=session_id,
@@ -1255,20 +1331,24 @@ async def resume_v2_session(
                         "status": result.status,
                         "success": result.success,
                         "fields_filled": len(result.fields_filled),
-                        "message": result.error_message or f"Completed with status: {result.status}",
+                        "message": result.error_message
+                        or f"Completed with status: {result.status}",
                     },
                     "timestamp": datetime.utcnow().isoformat(),
                 },
             )
-            await ws_manager.broadcast_global({
-                "type": "session_completed",
-                "payload": {"session_id": session_id, "status": result.status},
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            await ws_manager.broadcast_global(
+                {
+                    "type": "session_completed",
+                    "payload": {"session_id": session_id, "status": result.status},
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"Background resume failed for session {session_id}: {e}")
             import traceback
+
             traceback.print_exc()
 
             # Update session as failed
@@ -1291,11 +1371,13 @@ async def resume_v2_session(
                     "timestamp": datetime.utcnow().isoformat(),
                 },
             )
-            await ws_manager.broadcast_global({
-                "type": "session_error",
-                "payload": {"session_id": session_id, "error": str(e)},
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            await ws_manager.broadcast_global(
+                {
+                    "type": "session_error",
+                    "payload": {"session_id": session_id, "error": str(e)},
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
     # Start background task
     asyncio.create_task(run_resume_task())
@@ -1361,63 +1443,69 @@ async def websocket_v2_interventions(websocket: WebSocket):
             intervention_manager = get_intervention_manager()
             pending = intervention_manager.get_pending_interventions()
 
-            await websocket.send_json({
-                "type": "initial_state",
-                "payload": {
-                    "pending_count": len(pending),
-                    "interventions": [
-                        {
-                            "id": i.id,
-                            "session_id": i.session_id,
-                            "intervention_type": i.intervention_type.value,
-                            "status": i.status.value,
-                            "title": i.title,
-                            "description": i.description,
-                            "instructions": i.instructions,
-                            "current_url": i.current_url,
-                            "captcha_type": i.captcha_type,
-                            "created_at": i.created_at.isoformat(),
-                        }
-                        for i in pending
-                    ],
-                },
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            await websocket.send_json(
+                {
+                    "type": "initial_state",
+                    "payload": {
+                        "pending_count": len(pending),
+                        "interventions": [
+                            {
+                                "id": i.id,
+                                "session_id": i.session_id,
+                                "intervention_type": i.intervention_type.value,
+                                "status": i.status.value,
+                                "title": i.title,
+                                "description": i.description,
+                                "instructions": i.instructions,
+                                "current_url": i.current_url,
+                                "captcha_type": i.captcha_type,
+                                "created_at": i.created_at.isoformat(),
+                            }
+                            for i in pending
+                        ],
+                    },
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
         # Keep connection alive
         while True:
             data = await websocket.receive_text()
 
             if data == "ping":
-                await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+                await websocket.send_json(
+                    {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
+                )
 
             elif data == "refresh":
                 if GEMINI_AVAILABLE:
                     intervention_manager = get_intervention_manager()
                     pending = intervention_manager.get_pending_interventions()
 
-                    await websocket.send_json({
-                        "type": "refresh",
-                        "payload": {
-                            "pending_count": len(pending),
-                            "interventions": [
-                                {
-                                    "id": i.id,
-                                    "session_id": i.session_id,
-                                    "intervention_type": i.intervention_type.value,
-                                    "status": i.status.value,
-                                    "title": i.title,
-                                    "description": i.description,
-                                    "instructions": i.instructions,
-                                    "current_url": i.current_url,
-                                    "captcha_type": i.captcha_type,
-                                    "created_at": i.created_at.isoformat(),
-                                }
-                                for i in pending
-                            ],
-                        },
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "refresh",
+                            "payload": {
+                                "pending_count": len(pending),
+                                "interventions": [
+                                    {
+                                        "id": i.id,
+                                        "session_id": i.session_id,
+                                        "intervention_type": i.intervention_type.value,
+                                        "status": i.status.value,
+                                        "title": i.title,
+                                        "description": i.description,
+                                        "instructions": i.instructions,
+                                        "current_url": i.current_url,
+                                        "captcha_type": i.captcha_type,
+                                        "created_at": i.created_at.isoformat(),
+                                    }
+                                    for i in pending
+                                ],
+                            },
+                            "timestamp": datetime.utcnow().isoformat(),
+                        }
+                    )
 
     except WebSocketDisconnect:
         logger.info("V2 WebSocket disconnected from intervention feed")
@@ -1453,41 +1541,49 @@ async def websocket_v2_session(websocket: WebSocket, session_id: str):
 
     try:
         # Send initial status
-        await websocket.send_json({
-            "type": "connected",
-            "payload": {
-                "session_id": session_id,
-                "status": session.status.value,
-                "current_step": session.current_step,
-                "fields_filled": len(session.fields_filled),
-                "blocker_type": session.blocker_type.value if session.blocker_type else None,
-            },
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "payload": {
+                    "session_id": session_id,
+                    "status": session.status.value,
+                    "current_step": session.current_step,
+                    "fields_filled": len(session.fields_filled),
+                    "blocker_type": session.blocker_type.value if session.blocker_type else None,
+                },
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Handle client messages
         while True:
             data = await websocket.receive_text()
 
             if data == "ping":
-                await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+                await websocket.send_json(
+                    {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
+                )
 
             elif data == "status":
                 session = _application_sessions.get(session_id)
                 if session:
-                    await websocket.send_json({
-                        "type": "status",
-                        "payload": {
-                            "session_id": session_id,
-                            "status": session.status.value,
-                            "current_step": session.current_step,
-                            "total_steps": session.total_steps,
-                            "fields_filled": len(session.fields_filled),
-                            "blocker_type": session.blocker_type.value if session.blocker_type else None,
-                            "error": session.error,
-                        },
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "status",
+                            "payload": {
+                                "session_id": session_id,
+                                "status": session.status.value,
+                                "current_step": session.current_step,
+                                "total_steps": session.total_steps,
+                                "fields_filled": len(session.fields_filled),
+                                "blocker_type": session.blocker_type.value
+                                if session.blocker_type
+                                else None,
+                                "error": session.error,
+                            },
+                            "timestamp": datetime.utcnow().isoformat(),
+                        }
+                    )
 
     except WebSocketDisconnect:
         logger.info(f"V2 WebSocket disconnected for session {session_id}")

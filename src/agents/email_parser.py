@@ -22,10 +22,14 @@ class ExtractedJob(BaseModel):
     company: str = Field(description="Company name")
     location: str | None = Field(default=None, description="Job location")
     job_url: str = Field(description="URL to the job posting")
-    source_platform: str = Field(description="Platform that sent the alert (LinkedIn, InfoJobs, etc.)")
+    source_platform: str = Field(
+        description="Platform that sent the alert (LinkedIn, InfoJobs, etc.)"
+    )
     salary_range: str | None = Field(default=None, description="Salary range if mentioned")
     job_type: str | None = Field(default=None, description="Remote, hybrid, onsite")
-    brief_description: str | None = Field(default=None, description="Brief job description if available")
+    brief_description: str | None = Field(
+        default=None, description="Brief job description if available"
+    )
 
 
 class EmailParserInput(BaseModel):

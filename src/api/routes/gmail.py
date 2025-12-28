@@ -1,7 +1,7 @@
 """Gmail OAuth routes for connecting user's Gmail account."""
 
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 from urllib.parse import urlencode
 from uuid import UUID
@@ -212,7 +212,7 @@ async def initiate_gmail_connection(
     state = secrets.token_urlsafe(32)
     _gmail_oauth_states[state] = {
         "user_id": str(user_id),
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "requested_scopes": scopes,
         "requested_optional": requested_optional,
     }
@@ -249,8 +249,8 @@ async def gmail_oauth_callback(
         return RedirectResponse(url=error_url)
 
     user_id = UUID(state_data["user_id"])
-    requested_scopes = state_data.get("requested_scopes", GMAIL_REQUIRED_SCOPES)
-    requested_optional = state_data.get("requested_optional", [])
+    state_data.get("requested_scopes", GMAIL_REQUIRED_SCOPES)
+    state_data.get("requested_optional", [])
 
     try:
         # Exchange code for tokens
@@ -268,9 +268,9 @@ async def gmail_oauth_callback(
         gmail_email = await _get_gmail_user_email(access_token)
 
         # Calculate token expiry
-        token_expires_at = datetime.now(timezone.utc).replace(
-            tzinfo=None
-        ) + __import__("datetime").timedelta(seconds=expires_in)
+        token_expires_at = datetime.now(UTC).replace(tzinfo=None) + __import__(
+            "datetime"
+        ).timedelta(seconds=expires_in)
 
         # Find or create EmailConnection
         result = await db.execute(
@@ -304,7 +304,9 @@ async def gmail_oauth_callback(
         await db.flush()
 
         # Redirect to frontend with success
-        success_url = f"{settings.frontend_url}/profile?gmail_connected=true&gmail_email={gmail_email}"
+        success_url = (
+            f"{settings.frontend_url}/profile?gmail_connected=true&gmail_email={gmail_email}"
+        )
         return RedirectResponse(url=success_url)
 
     except Exception as e:
@@ -459,7 +461,7 @@ async def scan_emails(
         )
         connection = result.scalar_one_or_none()
         if connection:
-            connection.last_sync_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            connection.last_sync_at = datetime.now(UTC).replace(tzinfo=None)
             await db.flush()
 
         # Get existing job URLs for this user to avoid duplicates
@@ -485,7 +487,9 @@ async def scan_emails(
             print(f"[DEBUG] Email: {subject[:50]}... - Body length: {len(body)} chars")
             print(f"[DEBUG] Parser found {len(extracted_jobs)} jobs")
             for ej in extracted_jobs[:3]:
-                print(f"[DEBUG]   Job: {ej.title} at {ej.company} - {ej.job_url[:60] if ej.job_url else 'No URL'}...")
+                print(
+                    f"[DEBUG]   Job: {ej.title} at {ej.company} - {ej.job_url[:60] if ej.job_url else 'No URL'}..."
+                )
 
             # Convert to response format
             jobs_info = []

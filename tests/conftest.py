@@ -1,7 +1,6 @@
 """Pytest configuration and fixtures."""
 
 import os
-from typing import AsyncGenerator
 from unittest.mock import MagicMock, patch
 
 import pytest

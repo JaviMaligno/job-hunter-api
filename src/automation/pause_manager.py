@@ -6,9 +6,10 @@ including state persistence, timeout handling, and user interaction.
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -234,7 +235,7 @@ class PauseManager:
             await asyncio.wait_for(event.wait(), timeout=timeout)
             action = self._resume_actions.get(session_id, ResumeAction.CONTINUE)
             return action, self._states.get(session_id)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info(f"Session {session_id} timed out while waiting for resume")
             return ResumeAction.CANCEL, state
 

@@ -3,7 +3,6 @@
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.parse import urlparse
 
 import httpx
 
@@ -124,7 +123,9 @@ def _extract_meta_content(html: str, name: str) -> str | None:
         rf'<meta\s+property=["\']og:{name}["\']\s+content=["\']([^"\']+)["\']',
         rf'<meta\s+content=["\']([^"\']+)["\']\s+property=["\']og:{name}["\']',
         rf'<meta\s+name=["\']twitter:{name}["\']\s+content=["\']([^"\']+)["\']',
-        rf'<meta\s+name=["\']description["\']\s+content=["\']([^"\']+)["\']' if name == "description" else None,
+        r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']+)["\']'
+        if name == "description"
+        else None,
     ]
 
     for pattern in patterns:
@@ -244,7 +245,7 @@ def _extract_lever_job(html: str) -> ScrapedJob:
     job = ScrapedJob(platform="lever", success=True)
 
     # Title
-    title_match = re.search(r'<h2>([^<]+)</h2>', html)
+    title_match = re.search(r"<h2>([^<]+)</h2>", html)
     if title_match:
         job.title = title_match.group(1).strip()
     else:
@@ -422,11 +423,11 @@ async def scrape_job_url(url: str, timeout: float = 30.0) -> ScrapedJob:
 
         # Clean up any HTML entities in extracted text
         if job.title:
-            job.title = re.sub(r'&[a-zA-Z]+;', ' ', job.title).strip()
+            job.title = re.sub(r"&[a-zA-Z]+;", " ", job.title).strip()
         if job.company:
-            job.company = re.sub(r'&[a-zA-Z]+;', ' ', job.company).strip()
+            job.company = re.sub(r"&[a-zA-Z]+;", " ", job.company).strip()
         if job.description:
-            job.description = re.sub(r'&[a-zA-Z]+;', ' ', job.description).strip()
+            job.description = re.sub(r"&[a-zA-Z]+;", " ", job.description).strip()
 
         return job
 

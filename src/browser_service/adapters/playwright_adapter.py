@@ -425,8 +425,7 @@ class PlaywrightAdapter(BrowserAdapter):
             """
 
             result = await self.page.evaluate(
-                js_script,
-                {"rootSelector": selector, "formFieldsOnly": form_fields_only}
+                js_script, {"rootSelector": selector, "formFieldsOnly": form_fields_only}
             )
 
             form_fields = [FormField(**f) for f in result.get("fields", [])]

@@ -168,14 +168,17 @@ class JobLinkExtractor(HTMLParser):
         """Add pending link to job_links list."""
         if self.pending_link:
             combined_context = (
-                " ".join(self.pending_link["context_before"]) + " " +
-                " ".join(self.pending_link["context_after"])
+                " ".join(self.pending_link["context_before"])
+                + " "
+                + " ".join(self.pending_link["context_after"])
             ).strip()
-            self.job_links.append({
-                "url": self.pending_link["url"],
-                "text": self.pending_link["text"],
-                "context": combined_context,
-            })
+            self.job_links.append(
+                {
+                    "url": self.pending_link["url"],
+                    "text": self.pending_link["text"],
+                    "context": combined_context,
+                }
+            )
             self.pending_link = None
 
     def close(self):
@@ -198,7 +201,18 @@ class JobLinkExtractor(HTMLParser):
                 return True
 
         # Check for common job URL patterns
-        if any(pattern in url_lower for pattern in ["/job/", "/jobs/", "/vacancy/", "/opening/", "/position/", "/empleo/", "/oferta/"]):
+        if any(
+            pattern in url_lower
+            for pattern in [
+                "/job/",
+                "/jobs/",
+                "/vacancy/",
+                "/opening/",
+                "/position/",
+                "/empleo/",
+                "/oferta/",
+            ]
+        ):
             return True
 
         return False
@@ -328,7 +342,9 @@ def detect_platform(url: str, sender: str = "") -> str:
     return "other"
 
 
-def extract_job_info_from_text(link_text: str, context: str, url: str) -> tuple[str, str, str | None]:
+def extract_job_info_from_text(
+    link_text: str, context: str, url: str
+) -> tuple[str, str, str | None]:
     """
     Extract job title, company, and location from link text and context.
 
@@ -344,7 +360,9 @@ def extract_job_info_from_text(link_text: str, context: str, url: str) -> tuple[
 
     # Try to extract from link text first (more reliable)
     # Pattern: "Title at Company - Location" or "Title at Company, Location"
-    match = re.search(r"^([^@]+?)\s+at\s+([^,–-]+?)(?:\s*[,–-]\s*([^,–-]+))?$", clean_text, re.IGNORECASE)
+    match = re.search(
+        r"^([^@]+?)\s+at\s+([^,–-]+?)(?:\s*[,–-]\s*([^,–-]+))?$", clean_text, re.IGNORECASE
+    )
     if match:
         title = match.group(1).strip()
         company = match.group(2).strip()
@@ -377,8 +395,12 @@ def extract_job_info_from_text(link_text: str, context: str, url: str) -> tuple[
             title = match.group(1).strip()
             if title:
                 # Try to find company after "at"
-                company_match = re.search(r"\bat\s+([A-Z][A-Za-z0-9\s&]+?)(?:\s*[,–-]|$)", clean_text)
-                company = company_match.group(1).strip()[:50] if company_match else "Unknown Company"
+                company_match = re.search(
+                    r"\bat\s+([A-Z][A-Za-z0-9\s&]+?)(?:\s*[,–-]|$)", clean_text
+                )
+                company = (
+                    company_match.group(1).strip()[:50] if company_match else "Unknown Company"
+                )
                 return title.title(), company, None
 
     # Use link text as title if reasonable length
@@ -430,7 +452,9 @@ def parse_job_email(body: str, sender: str = "", subject: str = "") -> list[Extr
         url = link["url"]
 
         # Skip non-job links (search pages, collections, etc.)
-        if any(skip in url.lower() for skip in ["collections/", "search", "alerts", "notifications"]):
+        if any(
+            skip in url.lower() for skip in ["collections/", "search", "alerts", "notifications"]
+        ):
             continue
 
         # Normalize URL for deduplication (remove tracking params)
@@ -458,22 +482,20 @@ def parse_job_email(body: str, sender: str = "", subject: str = "") -> list[Extr
         seen_urls.add(normalized_url)
 
         # Extract job info
-        title, company, location = extract_job_info_from_text(
-            link["text"],
-            link["context"],
-            url
-        )
+        title, company, location = extract_job_info_from_text(link["text"], link["context"], url)
 
         # Detect platform
         platform = detect_platform(url, sender)
 
-        jobs.append(ExtractedJob(
-            title=title,
-            company=company,
-            location=location,
-            job_url=url,
-            source_platform=platform,
-        ))
+        jobs.append(
+            ExtractedJob(
+                title=title,
+                company=company,
+                location=location,
+                job_url=url,
+                source_platform=platform,
+            )
+        )
 
     # If no links found via HTML parsing, try regex extraction
     if not jobs:
@@ -491,12 +513,14 @@ def parse_job_email(body: str, sender: str = "", subject: str = "") -> list[Extr
             # Try to extract title from subject if available
             title = subject if subject else "Job Opening"
 
-            jobs.append(ExtractedJob(
-                title=title,
-                company="Unknown Company",
-                location=None,
-                job_url=url,
-                source_platform=platform,
-            ))
+            jobs.append(
+                ExtractedJob(
+                    title=title,
+                    company="Unknown Company",
+                    location=None,
+                    job_url=url,
+                    source_platform=platform,
+                )
+            )
 
     return jobs

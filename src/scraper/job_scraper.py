@@ -162,7 +162,9 @@ class JobScraper:
                     return await self._scrape_with_httpx_ai(url, platform)
                 except Exception as http_e:
                     logger.error(f"HTTP + AI also failed: {http_e}")
-                    raise ValueError(f"Could not extract job data from {url}. Site may require manual import.")
+                    raise ValueError(
+                        f"Could not extract job data from {url}. Site may require manual import."
+                    )
 
         # Try traditional scraping first
         try:

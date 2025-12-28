@@ -11,16 +11,17 @@ import logging
 import os
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 from google import genai
 from google.genai import errors as genai_errors
+from pydantic import BaseModel, Field
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 # CAPTCHA solver (optional)
 try:
     from src.integrations.captcha.solver import CaptchaSolver, CaptchaType
+
     CAPTCHA_SOLVER_AVAILABLE = True
 except ImportError:
     CAPTCHA_SOLVER_AVAILABLE = False
@@ -34,6 +35,7 @@ try:
         InterventionType,
         get_intervention_manager,
     )
+
     INTERVENTION_AVAILABLE = True
 except ImportError:
     INTERVENTION_AVAILABLE = False
@@ -46,6 +48,7 @@ logger = logging.getLogger(__name__)
 # Try to import langfuse, but make it optional
 try:
     from langfuse.decorators import langfuse_context, observe
+
     LANGFUSE_AVAILABLE = True
 except Exception:
     LANGFUSE_AVAILABLE = False
@@ -53,6 +56,7 @@ except Exception:
     def observe():
         def decorator(func):
             return func
+
         return decorator
 
     class DummyContext:
@@ -72,6 +76,7 @@ except Exception:
 
 class UserFormData(BaseModel):
     """User data for form filling."""
+
     first_name: str
     last_name: str
     email: str
@@ -88,6 +93,7 @@ class UserFormData(BaseModel):
 
 class OrchestratorInput(BaseModel):
     """Input for the orchestrator agent."""
+
     job_url: str = Field(description="URL of the job posting or application form")
     user_data: UserFormData
     cv_content: str = Field(description="CV/Resume content as text")
@@ -97,12 +103,17 @@ class OrchestratorInput(BaseModel):
     # Session info for intervention management
     session_id: str | None = Field(default=None, description="Session ID for intervention tracking")
     user_id: str | None = Field(default=None, description="User ID for intervention tracking")
-    wait_for_intervention: bool = Field(default=True, description="Keep browser open and wait for user to resolve blockers")
-    intervention_timeout_seconds: float = Field(default=1800, description="Max time to wait for intervention (30 min)")
+    wait_for_intervention: bool = Field(
+        default=True, description="Keep browser open and wait for user to resolve blockers"
+    )
+    intervention_timeout_seconds: float = Field(
+        default=1800, description="Max time to wait for intervention (30 min)"
+    )
 
 
 class FieldFilled(BaseModel):
     """Record of a filled form field."""
+
     field_name: str
     field_type: str
     value: str
@@ -111,6 +122,7 @@ class FieldFilled(BaseModel):
 
 class BlockerDetected(BaseModel):
     """Information about a detected blocker."""
+
     blocker_type: str  # captcha, login_required, file_upload, multi_step
     captcha_subtype: str | None = None  # turnstile, hcaptcha, recaptcha
     description: str
@@ -122,6 +134,7 @@ class BlockerDetected(BaseModel):
 
 class CaptchaSolveInfo(BaseModel):
     """Information about CAPTCHA solving attempt."""
+
     attempted: bool = False
     success: bool = False
     captcha_type: str | None = None
@@ -132,6 +145,7 @@ class CaptchaSolveInfo(BaseModel):
 
 class OrchestratorOutput(BaseModel):
     """Output from the orchestrator agent."""
+
     success: bool
     status: str  # completed, paused, failed, needs_intervention
     fields_filled: list[FieldFilled] = Field(default_factory=list)
@@ -215,13 +229,14 @@ Always be thorough but cautious - don't submit until all required fields are fil
         # Initialize CAPTCHA solver if available
         self._captcha_solver: CaptchaSolver | None = None
         if CAPTCHA_SOLVER_AVAILABLE and auto_solve_captcha:
-            captcha_key = captcha_api_key or settings.twocaptcha_api_key or os.getenv("TWOCAPTCHA_API_KEY")
+            captcha_key = (
+                captcha_api_key or settings.twocaptcha_api_key or os.getenv("TWOCAPTCHA_API_KEY")
+            )
             if captcha_key:
                 self._captcha_solver = CaptchaSolver(api_key=captcha_key)
                 logger.info("CAPTCHA solver initialized")
             else:
                 logger.warning("No 2captcha API key - CAPTCHA auto-solve disabled")
-
 
     def _generate_with_retry(
         self,
@@ -263,7 +278,9 @@ Always be thorough but cautious - don't submit until all required fields are fil
                         contents=contents,
                     )
                     if attempt > 0 or model_name != current_model:
-                        logger.info(f"Gemini call succeeded with {model_name} on attempt {attempt + 1}")
+                        logger.info(
+                            f"Gemini call succeeded with {model_name} on attempt {attempt + 1}"
+                        )
                     return response
 
                 except genai_errors.ClientError as e:
@@ -271,13 +288,18 @@ Always be thorough but cautious - don't submit until all required fields are fil
                     last_error = e
 
                     # Check for rate limit (429)
-                    if "429" in str(e) or "resource exhausted" in error_str or "too many requests" in error_str:
-                        wait_time = min(2 ** attempt * 2, 30)  # Exponential backoff, max 30s
+                    if (
+                        "429" in str(e)
+                        or "resource exhausted" in error_str
+                        or "too many requests" in error_str
+                    ):
+                        wait_time = min(2**attempt * 2, 30)  # Exponential backoff, max 30s
                         logger.warning(
                             f"Rate limited on {model_name} (attempt {attempt + 1}/{retries}), "
                             f"waiting {wait_time}s before retry"
                         )
                         import time
+
                         time.sleep(wait_time)
                         continue
 
@@ -287,12 +309,13 @@ Always be thorough but cautious - don't submit until all required fields are fil
 
                 except genai_errors.ServerError as e:
                     last_error = e
-                    wait_time = min(2 ** attempt * 2, 30)
+                    wait_time = min(2**attempt * 2, 30)
                     logger.warning(
                         f"Server error on {model_name} (attempt {attempt + 1}/{retries}), "
                         f"waiting {wait_time}s before retry: {e}"
                     )
                     import time
+
                     time.sleep(wait_time)
                     continue
 
@@ -300,20 +323,28 @@ Always be thorough but cautious - don't submit until all required fields are fil
                     last_error = e
                     # Check if it's a rate limit error in exception message
                     error_str = str(e).lower()
-                    if "429" in str(e) or "resource exhausted" in error_str or "too many requests" in error_str:
-                        wait_time = min(2 ** attempt * 2, 30)
+                    if (
+                        "429" in str(e)
+                        or "resource exhausted" in error_str
+                        or "too many requests" in error_str
+                    ):
+                        wait_time = min(2**attempt * 2, 30)
                         logger.warning(
                             f"Rate limited on {model_name} (attempt {attempt + 1}/{retries}), "
                             f"waiting {wait_time}s before retry"
                         )
                         import time
+
                         time.sleep(wait_time)
                         continue
 
                     # Unknown error - log and retry
-                    logger.warning(f"Unexpected error on {model_name} (attempt {attempt + 1}/{retries}): {e}")
+                    logger.warning(
+                        f"Unexpected error on {model_name} (attempt {attempt + 1}/{retries}): {e}"
+                    )
                     if attempt < retries - 1:
                         import time
+
                         time.sleep(2)
                         continue
                     break
@@ -383,9 +414,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
                             steps_completed.append("captcha_detected")
                             logger.info(f"Attempting to solve {blocker.captcha_subtype} CAPTCHA")
 
-                            captcha_result = await self._solve_captcha(
-                                snapshot, input_data.job_url
-                            )
+                            captcha_result = await self._solve_captcha(snapshot, input_data.job_url)
                             captcha_info = CaptchaSolveInfo(
                                 attempted=True,
                                 success=captcha_result.get("success", False),
@@ -419,18 +448,18 @@ Always be thorough but cautious - don't submit until all required fields are fil
                                     f"Browser staying open for manual intervention. "
                                     f"Session: {input_data.session_id}"
                                 )
-                                
+
                                 # Get current URL for intervention context
                                 current_url = await self._get_current_url()
-                                
+
                                 # Create intervention request
                                 intervention_mgr = get_intervention_manager()
                                 intervention = await intervention_mgr.request_intervention(
                                     session_id=input_data.session_id,
                                     user_id=input_data.user_id,
                                     intervention_type=(
-                                        InterventionType.CAPTCHA 
-                                        if blocker.blocker_type == "captcha" 
+                                        InterventionType.CAPTCHA
+                                        if blocker.blocker_type == "captcha"
                                         else InterventionType.OTHER
                                     ),
                                     title=f"Manual intervention required: {blocker.blocker_type}",
@@ -442,23 +471,36 @@ Always be thorough but cautious - don't submit until all required fields are fil
                                     ),
                                     current_url=current_url,
                                     captcha_type=blocker.captcha_subtype,
-                                    captcha_solve_attempted=captcha_info.attempted if captcha_info else False,
-                                    captcha_solve_error=captcha_info.error if captcha_info else None,
-                                    timeout_minutes=int(input_data.intervention_timeout_seconds / 60),
+                                    captcha_solve_attempted=captcha_info.attempted
+                                    if captcha_info
+                                    else False,
+                                    captcha_solve_error=captcha_info.error
+                                    if captcha_info
+                                    else None,
+                                    timeout_minutes=int(
+                                        input_data.intervention_timeout_seconds / 60
+                                    ),
                                 )
-                                
+
                                 # Wait for user to resolve the intervention
                                 # Browser stays open during this time!
-                                logger.info(f"Waiting for intervention {intervention.id} resolution...")
-                                resolution, updated_intervention = await intervention_mgr.wait_for_resolution(
+                                logger.info(
+                                    f"Waiting for intervention {intervention.id} resolution..."
+                                )
+                                (
+                                    resolution,
+                                    updated_intervention,
+                                ) = await intervention_mgr.wait_for_resolution(
                                     intervention.id,
                                     timeout_seconds=input_data.intervention_timeout_seconds,
                                 )
-                                
+
                                 if resolution and resolution.action == "continue":
                                     # User resolved it, continue with automation
                                     steps_completed.append("intervention_resolved")
-                                    logger.info("Intervention resolved by user, continuing automation")
+                                    logger.info(
+                                        "Intervention resolved by user, continuing automation"
+                                    )
                                     # Take fresh snapshot after user intervention
                                     await asyncio.sleep(1)
                                     snapshot = await self._take_snapshot()
@@ -510,9 +552,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
 
                     # Step 5: Handle file upload if needed
                     if input_data.cv_file_path:
-                        upload_success = await self._upload_cv(
-                            snapshot, input_data.cv_file_path
-                        )
+                        upload_success = await self._upload_cv(snapshot, input_data.cv_file_path)
                         if upload_success:
                             steps_completed.append("cv_uploaded")
 
@@ -562,7 +602,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
     async def _take_screenshot(self) -> str | None:
         """Take a screenshot and return the path."""
         try:
-            result = await self._mcp_session.call_tool("take_screenshot", {})
+            await self._mcp_session.call_tool("take_screenshot", {})
             # Screenshot is returned as base64, we'd need to save it
             return "screenshot_captured"
         except Exception:
@@ -617,9 +657,7 @@ Snapshot (first 3000 chars):
         response = self._generate_with_retry(contents=prompt)
         return response.text.strip().lower()
 
-    async def _check_blockers(
-        self, snapshot: str, analysis: str
-    ) -> BlockerDetected | None:
+    async def _check_blockers(self, snapshot: str, analysis: str) -> BlockerDetected | None:
         """Check for blockers like CAPTCHA, login requirements, etc."""
         blocker_check_prompt = f"""Analyze this page for blockers:
 
@@ -649,10 +687,7 @@ If no blocker, return: {{"type": "none"}}
 
             if result.get("type") and result["type"] != "none":
                 captcha_subtype = result.get("subtype")
-                can_auto = (
-                    result["type"] == "captcha"
-                    and self._captcha_solver is not None
-                )
+                can_auto = result["type"] == "captcha" and self._captcha_solver is not None
                 return BlockerDetected(
                     blocker_type=result["type"],
                     captcha_subtype=captcha_subtype,
@@ -678,8 +713,7 @@ If no blocker, return: {{"type": "none"}}
             # Get page HTML for sitekey extraction
             # The snapshot is accessibility tree, we need actual HTML
             page_content = await self._mcp_session.call_tool(
-                "evaluate_script",
-                {"expression": "document.documentElement.outerHTML"}
+                "evaluate_script", {"expression": "document.documentElement.outerHTML"}
             )
             page_html = str(page_content)
 
@@ -697,8 +731,7 @@ If no blocker, return: {{"type": "none"}}
                         captcha_type, result.token
                     )
                     await self._mcp_session.call_tool(
-                        "evaluate_script",
-                        {"expression": injection_script}
+                        "evaluate_script", {"expression": injection_script}
                     )
                     logger.info(f"Injected {captcha_type.value} token into page")
 
@@ -781,12 +814,14 @@ Snapshot:
 
                 if uid and value:
                     success = await self._fill(uid, value)
-                    filled.append(FieldFilled(
-                        field_name=field_type,
-                        field_type=field_type,
-                        value=value,
-                        success=success,
-                    ))
+                    filled.append(
+                        FieldFilled(
+                            field_name=field_type,
+                            field_type=field_type,
+                            value=value,
+                            success=success,
+                        )
+                    )
                     await asyncio.sleep(0.3)  # Small delay between fills
 
         except json.JSONDecodeError:
@@ -808,10 +843,7 @@ Snapshot (first 3000 chars):
 
         if uid and "_" in uid and "NOT_FOUND" not in uid:
             try:
-                await self._mcp_session.call_tool(
-                    "upload_file",
-                    {"uid": uid, "paths": [cv_path]}
-                )
+                await self._mcp_session.call_tool("upload_file", {"uid": uid, "paths": [cv_path]})
                 return True
             except Exception:
                 pass

@@ -26,6 +26,7 @@ def _get_browser_client_class() -> type:
     global _browser_client_class
     if _browser_client_class is None:
         from src.automation.client import BrowserServiceClient
+
         _browser_client_class = BrowserServiceClient
     return _browser_client_class
 
@@ -197,8 +198,8 @@ Always respond with valid JSON matching the requested schema."""
         """
         # Initialize browser client if needed (lazy import to avoid circular dependency)
         if self._browser_client is None:
-            BrowserServiceClient = _get_browser_client_class()
-            self._browser_client = BrowserServiceClient()
+            browser_client_class = _get_browser_client_class()
+            self._browser_client = browser_client_class()
 
         try:
             # Don't use context manager - we need to keep session open for interventions
@@ -210,11 +211,14 @@ Always respond with valid JSON matching the requested schema."""
             if result.status != ApplicationStatus.NEEDS_INTERVENTION:
                 await self._browser_client.__aexit__(None, None, None)
             else:
-                logger.info(f"Keeping browser session open for intervention (session_id={result.browser_session_id})")
+                logger.info(
+                    f"Keeping browser session open for intervention (session_id={result.browser_session_id})"
+                )
 
             return result
         except Exception as e:
             import traceback
+
             error_msg = str(e) or f"{type(e).__name__}: {repr(e)}"
             logger.error(f"Form filling failed: {error_msg}")
             logger.error(f"Exception traceback:\n{traceback.format_exc()}")
@@ -243,8 +247,14 @@ Always respond with valid JSON matching the requested schema."""
         # Create browser session - use settings default if not specified
         effective_mode = input_data.browser_mode
         if effective_mode is None:
-            effective_mode = BrowserMode.CHROME_DEVTOOLS if settings.default_browser_mode == "chrome-devtools" else BrowserMode.PLAYWRIGHT
-        logger.info(f"Creating browser session for {input_data.application_url} (mode={effective_mode.value})")
+            effective_mode = (
+                BrowserMode.CHROME_DEVTOOLS
+                if settings.default_browser_mode == "chrome-devtools"
+                else BrowserMode.PLAYWRIGHT
+            )
+        logger.info(
+            f"Creating browser session for {input_data.application_url} (mode={effective_mode.value})"
+        )
         session = await client.create_session(
             mode=effective_mode,
             headless=input_data.headless,
@@ -264,6 +274,7 @@ Always respond with valid JSON matching the requested schema."""
 
         # Wait a bit for JS-loaded content (CAPTCHAs, dynamic forms)
         import asyncio
+
         await asyncio.sleep(2)
         logger.info("Waited for page content to fully load")
 
@@ -390,13 +401,15 @@ Always respond with valid JSON matching the requested schema."""
         has_captcha, captcha_type = self._detect_captcha(page_content)
         has_login_required = self._detect_login_required(page_url, page_content)
 
-        logger.info(f"Form analysis: has_captcha={has_captcha}, captcha_type={captcha_type}, has_login={has_login_required}")
-        logger.debug(f"Page content length: {len(page_content)}, contains 'recaptcha': {'recaptcha' in page_content.lower()}")
+        logger.info(
+            f"Form analysis: has_captcha={has_captcha}, captcha_type={captcha_type}, has_login={has_login_required}"
+        )
+        logger.debug(
+            f"Page content length: {len(page_content)}, contains 'recaptcha': {'recaptcha' in page_content.lower()}"
+        )
 
         # Check for file upload fields
-        has_file_upload = any(
-            f.field_type == "file" for f in dom.form_fields
-        )
+        has_file_upload = any(f.field_type == "file" for f in dom.form_fields)
 
         # Detect multi-step form
         is_multi_step, current_step, total_steps = self._detect_multi_step(page_content)
@@ -463,19 +476,35 @@ Always respond with valid JSON matching the requested schema."""
         # Expanded CAPTCHA detection patterns
         captcha_patterns = {
             "cloudflare": [
-                "cf-turnstile", "challenge-platform", "cloudflare-challenge",
-                "cf-chl-widget", "turnstile", "challenge-running",
+                "cf-turnstile",
+                "challenge-platform",
+                "cloudflare-challenge",
+                "cf-chl-widget",
+                "turnstile",
+                "challenge-running",
             ],
             "hcaptcha": [
-                "h-captcha", "hcaptcha.com", "hcaptcha-box", "data-hcaptcha",
+                "h-captcha",
+                "hcaptcha.com",
+                "hcaptcha-box",
+                "data-hcaptcha",
             ],
             "recaptcha": [
-                "g-recaptcha", "recaptcha.net", "grecaptcha", "recaptcha-token",
-                "recaptcha/api", "google.com/recaptcha", "recaptcha-anchor",
-                "recaptcha_challenge", "rc-anchor", "recaptcha-checkbox",
+                "g-recaptcha",
+                "recaptcha.net",
+                "grecaptcha",
+                "recaptcha-token",
+                "recaptcha/api",
+                "google.com/recaptcha",
+                "recaptcha-anchor",
+                "recaptcha_challenge",
+                "rc-anchor",
+                "recaptcha-checkbox",
             ],
             "funcaptcha": [
-                "funcaptcha", "arkoselabs.com", "arkose",
+                "funcaptcha",
+                "arkoselabs.com",
+                "arkose",
             ],
         }
 

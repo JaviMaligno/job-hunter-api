@@ -17,7 +17,7 @@ import sys
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
 
@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google import genai
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -43,8 +44,7 @@ async def test_gemini_basic():
     # Try primary model first
     try:
         response = client.models.generate_content(
-            model=MODEL_PRIMARY,
-            contents="Say 'Hello from Gemini 2.5 Pro!' in exactly those words."
+            model=MODEL_PRIMARY, contents="Say 'Hello from Gemini 2.5 Pro!' in exactly those words."
         )
         print(f"[OK] Model: {MODEL_PRIMARY}")
         print(f"[OK] Response: {response.text}")
@@ -56,7 +56,7 @@ async def test_gemini_basic():
     try:
         response = client.models.generate_content(
             model=MODEL_FALLBACK,
-            contents="Say 'Hello from Gemini 2.5 Flash!' in exactly those words."
+            contents="Say 'Hello from Gemini 2.5 Flash!' in exactly those words.",
         )
         print(f"[OK] Fallback Model: {MODEL_FALLBACK}")
         print(f"[OK] Response: {response.text}")
@@ -86,7 +86,7 @@ async def test_mcp_connection():
                 tools = await session.list_tools()
                 tool_names = [t.name for t in tools.tools]
 
-                print(f"[OK] MCP Connection established")
+                print("[OK] MCP Connection established")
                 print(f"[OK] Available tools ({len(tool_names)}):")
                 for name in tool_names:
                     print(f"     - {name}")
@@ -95,6 +95,7 @@ async def test_mcp_connection():
     except Exception as e:
         print(f"[FAIL] MCP Connection failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -117,17 +118,13 @@ async def test_manual_mcp_navigation():
                 # Navigate to a page
                 print("-> Navigating to example.com...")
                 result = await session.call_tool(
-                    "navigate_page",
-                    arguments={"url": "https://example.com"}
+                    "navigate_page", arguments={"url": "https://example.com"}
                 )
-                print(f"[OK] Navigation complete")
+                print("[OK] Navigation complete")
 
                 # Take a snapshot
                 print("-> Taking page snapshot...")
-                snapshot = await session.call_tool(
-                    "take_snapshot",
-                    arguments={}
-                )
+                snapshot = await session.call_tool("take_snapshot", arguments={})
                 # Snapshot can be large, just show summary
                 snapshot_text = str(snapshot)
                 print(f"[OK] Snapshot received ({len(snapshot_text)} chars)")
@@ -143,6 +140,7 @@ async def test_manual_mcp_navigation():
     except Exception as e:
         print(f"[FAIL] MCP navigation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -181,10 +179,10 @@ async def test_gemini_with_mcp_tools():
                     config={
                         "tools": [session],
                         "automatic_function_calling": {"disable": False},
-                    }
+                    },
                 )
 
-                print(f"[OK] Gemini response:")
+                print("[OK] Gemini response:")
                 print(response.text)
 
                 return True
@@ -192,6 +190,7 @@ async def test_gemini_with_mcp_tools():
     except Exception as e:
         print(f"[FAIL] Gemini + MCP failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -216,10 +215,7 @@ async def test_job_form_navigation():
 
                 # Navigate to job page
                 print(f"-> Navigating to: {test_url}")
-                await session.call_tool(
-                    "navigate_page",
-                    arguments={"url": test_url}
-                )
+                await session.call_tool("navigate_page", arguments={"url": test_url})
                 print("[OK] Navigation complete")
 
                 # Wait a bit for page to load
@@ -227,10 +223,7 @@ async def test_job_form_navigation():
 
                 # Take snapshot
                 print("-> Taking snapshot...")
-                snapshot = await session.call_tool(
-                    "take_snapshot",
-                    arguments={}
-                )
+                snapshot = await session.call_tool("take_snapshot", arguments={})
 
                 snapshot_text = str(snapshot)
                 print(f"[OK] Snapshot received ({len(snapshot_text)} chars)")
@@ -246,6 +239,7 @@ async def test_job_form_navigation():
     except Exception as e:
         print(f"[FAIL] Job form navigation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -135,9 +135,7 @@ class GeminiExtractor:
 
         # Clean and optimize the content for LLM extraction
         cleaned_content = clean_html_for_extraction(html_content, max_length=25000)
-        logger.debug(
-            f"Cleaned content: {len(html_content)} -> {len(cleaned_content)} chars"
-        )
+        logger.debug(f"Cleaned content: {len(html_content)} -> {len(cleaned_content)} chars")
 
         prompt = f"{EXTRACTION_PROMPT}\n\nURL: {url}\n\n{cleaned_content}"
 

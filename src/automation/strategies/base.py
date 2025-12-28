@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from src.automation.models import UserFormData  # Shared model to avoid circular import
 from src.automation.client import BrowserServiceClient
+from src.automation.models import UserFormData  # Shared model to avoid circular import
 from src.browser_service.models import FormField
 
 

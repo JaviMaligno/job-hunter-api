@@ -2,6 +2,7 @@
 """List available Gemini models."""
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,5 +21,5 @@ for model in client.models.list():
     # Filter to show only generative models
     if "gemini" in name.lower():
         print(f"  {name}")
-        if hasattr(model, 'supported_generation_methods'):
+        if hasattr(model, "supported_generation_methods"):
             print(f"    Methods: {model.supported_generation_methods}")

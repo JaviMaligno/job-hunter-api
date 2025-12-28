@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -74,11 +74,9 @@ def adapt_cv(
     job_title: Annotated[str, typer.Option("--title", "-t", help="Job title")],
     company: Annotated[str, typer.Option("--company", help="Company name")],
     language: Annotated[str, typer.Option("--lang", "-l", help="Output language")] = "en",
-    output: Annotated[
-        Optional[Path], typer.Option("--output", "-o", help="Output file path")
-    ] = None,
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="Output file path")] = None,
     api_key: Annotated[
-        Optional[str], typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
+        str | None, typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
     ] = None,
 ):
     """
@@ -167,11 +165,9 @@ def cover_letter(
     tone: Annotated[
         str, typer.Option("--tone", help="Tone: professional, enthusiastic, casual")
     ] = "professional",
-    output: Annotated[
-        Optional[Path], typer.Option("--output", "-o", help="Output file path")
-    ] = None,
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="Output file path")] = None,
     api_key: Annotated[
-        Optional[str], typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
+        str | None, typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
     ] = None,
 ):
     """
@@ -248,12 +244,14 @@ def gmail_login():
         console.print("Use 'gmail-logout' to disconnect and re-authenticate")
         return
 
-    console.print(Panel(
-        "[bold]Gmail Authentication[/bold]\n\n"
-        "A browser window will open for Google login.\n"
-        "Grant access to read your emails.",
-        title="Job Hunter",
-    ))
+    console.print(
+        Panel(
+            "[bold]Gmail Authentication[/bold]\n\n"
+            "A browser window will open for Google login.\n"
+            "Grant access to read your emails.",
+            title="Job Hunter",
+        )
+    )
 
     try:
         console.print("[dim]Waiting for authentication...[/dim]")
@@ -293,7 +291,9 @@ def gmail_logout():
 @app.command()
 def gmail_fetch(
     max_emails: Annotated[int, typer.Option("--max", "-m", help="Maximum emails to fetch")] = 20,
-    unread_only: Annotated[bool, typer.Option("--unread", "-u", help="Only fetch unread emails")] = False,
+    unread_only: Annotated[
+        bool, typer.Option("--unread", "-u", help="Only fetch unread emails")
+    ] = False,
 ):
     """
     Fetch job alert emails from Gmail.
@@ -326,7 +326,9 @@ def gmail_fetch(
 
         for i, email in enumerate(emails, 1):
             # Truncate subject if too long
-            subject = email["subject"][:60] + "..." if len(email["subject"]) > 60 else email["subject"]
+            subject = (
+                email["subject"][:60] + "..." if len(email["subject"]) > 60 else email["subject"]
+            )
             sender = email["sender"][:40] + "..." if len(email["sender"]) > 40 else email["sender"]
 
             console.print(f"[bold]{i}.[/bold] {subject}")
@@ -356,7 +358,9 @@ def info():
     console.print(f"  Environment: {settings.app_env.value}")
     console.print(f"  Debug: {settings.debug}")
     console.print(f"  Database: {settings.database_url[:50]}...")
-    console.print(f"  Langfuse: {'[green]Configured[/green]' if settings.langfuse_secret_key else '[yellow]Not configured[/yellow]'}")
+    console.print(
+        f"  Langfuse: {'[green]Configured[/green]' if settings.langfuse_secret_key else '[yellow]Not configured[/yellow]'}"
+    )
 
     # Claude API / Bedrock
     if settings.bedrock_enabled:
@@ -367,8 +371,12 @@ def info():
     else:
         console.print("  [yellow]Claude: Not configured (enable Bedrock or set API key)[/yellow]")
 
-    console.print(f"  Gmail: {'[green]Connected[/green]' if is_authenticated() else '[yellow]Not connected (run gmail-login)[/yellow]'}")
-    console.print(f"  Google OAuth: {'[green]Configured[/green]' if settings.google_client_id else '[yellow]Not configured[/yellow]'}")
+    console.print(
+        f"  Gmail: {'[green]Connected[/green]' if is_authenticated() else '[yellow]Not connected (run gmail-login)[/yellow]'}"
+    )
+    console.print(
+        f"  Google OAuth: {'[green]Configured[/green]' if settings.google_client_id else '[yellow]Not configured[/yellow]'}"
+    )
 
 
 # ============================================================================
@@ -380,13 +388,15 @@ def info():
 def apply(
     job_url: Annotated[str, typer.Argument(help="URL of the job to apply to")],
     cv_path: Annotated[Path, typer.Option("--cv", "-c", help="Path to CV file")],
-    mode: Annotated[str, typer.Option("--mode", "-m", help="Mode: assisted, semi-auto, auto")] = "assisted",
+    mode: Annotated[
+        str, typer.Option("--mode", "-m", help="Mode: assisted, semi-auto, auto")
+    ] = "assisted",
     cover_letter_path: Annotated[
-        Optional[Path], typer.Option("--cover", help="Path to cover letter file")
+        Path | None, typer.Option("--cover", help="Path to cover letter file")
     ] = None,
     headless: Annotated[bool, typer.Option("--headless", help="Run browser headless")] = False,
     api_key: Annotated[
-        Optional[str], typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
+        str | None, typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Claude API key")
     ] = None,
 ):
     """
@@ -444,7 +454,9 @@ def apply(
 
     if not service_available:
         console.print("\n[yellow]Browser Service not running[/yellow]")
-        console.print("Start it with: [bold]uvicorn src.browser_service.main:app --port 8001[/bold]")
+        console.print(
+            "Start it with: [bold]uvicorn src.browser_service.main:app --port 8001[/bold]"
+        )
         console.print("\nOr run in headless mode without the service (coming soon)")
         raise typer.Exit(1)
 
@@ -460,7 +472,9 @@ def apply(
         country="United Kingdom",
     )
 
-    console.print("[yellow]Note: Using placeholder user data. Configure your profile for real applications.[/yellow]")
+    console.print(
+        "[yellow]Note: Using placeholder user data. Configure your profile for real applications.[/yellow]"
+    )
 
     async def run_apply():
         agent = FormFillerAgent(claude_api_key=api_key)
@@ -497,7 +511,7 @@ def apply(
 
         if result.fields_filled:
             console.print(f"\n[bold]Fields Filled:[/bold] {len(result.fields_filled)}")
-            for selector, value in list(result.fields_filled.items())[:5]:
+            for _selector, value in list(result.fields_filled.items())[:5]:
                 display_value = value[:30] + "..." if len(value) > 30 else value
                 console.print(f"  [green]+[/green] {display_value}")
 
@@ -514,10 +528,12 @@ def apply(
                 console.print(f"  {result.blocker_details}")
 
         if result.requires_user_action:
-            console.print(f"\n[bold yellow]Action Required:[/bold yellow]")
+            console.print("\n[bold yellow]Action Required:[/bold yellow]")
             console.print(f"  {result.user_action_message}")
             console.print(f"\n  Session ID: {result.browser_session_id}")
-            console.print(f"  Use 'apply-resume {result.browser_session_id}' after completing the action")
+            console.print(
+                f"  Use 'apply-resume {result.browser_session_id}' after completing the action"
+            )
 
         if result.screenshot_path:
             console.print(f"\n[dim]Screenshot:[/dim] {result.screenshot_path}")
@@ -532,7 +548,7 @@ def apply(
 
 @app.command()
 def apply_status(
-    session_id: Annotated[Optional[str], typer.Argument(help="Session ID to check")] = None,
+    session_id: Annotated[str | None, typer.Argument(help="Session ID to check")] = None,
 ):
     """
     Check status of application sessions.
@@ -553,14 +569,16 @@ def apply_status(
         # Show specific session
         session = handler.get_paused_session(session_id)
         if session:
-            console.print(Panel(
-                f"[bold]Session:[/bold] {session.session_id}\n"
-                f"[bold]Blocker:[/bold] {session.blocker_type.value}\n"
-                f"[bold]Message:[/bold] {session.blocker_message}\n"
-                f"[bold]Paused At:[/bold] {session.paused_at}\n"
-                f"[bold]URL:[/bold] {session.page_url or 'N/A'}",
-                title="Session Details",
-            ))
+            console.print(
+                Panel(
+                    f"[bold]Session:[/bold] {session.session_id}\n"
+                    f"[bold]Blocker:[/bold] {session.blocker_type.value}\n"
+                    f"[bold]Message:[/bold] {session.blocker_message}\n"
+                    f"[bold]Paused At:[/bold] {session.paused_at}\n"
+                    f"[bold]URL:[/bold] {session.page_url or 'N/A'}",
+                    title="Session Details",
+                )
+            )
             if session.screenshot_path:
                 console.print(f"\n[dim]Screenshot:[/dim] {session.screenshot_path}")
         else:
@@ -601,18 +619,22 @@ def apply_resume(
         console.print(f"[yellow]Session not found or already completed:[/yellow] {session_id}")
         raise typer.Exit(1)
 
-    console.print(Panel(
-        f"[bold]Resuming session:[/bold] {session_id}\n"
-        f"[dim]Previous blocker:[/dim] {session.blocker_type.value}\n"
-        f"[dim]URL:[/dim] {session.page_url or 'N/A'}",
-        title="Job Hunter - Resume",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Resuming session:[/bold] {session_id}\n"
+            f"[dim]Previous blocker:[/dim] {session.blocker_type.value}\n"
+            f"[dim]URL:[/dim] {session.page_url or 'N/A'}",
+            title="Job Hunter - Resume",
+        )
+    )
 
     # Mark as resumed
     handler.resume_session(session_id)
 
     console.print("\n[green]Session marked as resumed[/green]")
-    console.print("[dim]Note: In a full implementation, this would reconnect to the browser session[/dim]")
+    console.print(
+        "[dim]Note: In a full implementation, this would reconnect to the browser session[/dim]"
+    )
     console.print("[dim]and continue the form filling process.[/dim]")
 
 
@@ -633,13 +655,15 @@ def browser_start(
     """
     import uvicorn
 
-    console.print(Panel(
-        f"[bold]Starting Browser Service[/bold]\n\n"
-        f"Mode: {mode}\n"
-        f"Port: {port}\n\n"
-        f"Press Ctrl+C to stop",
-        title="Job Hunter - Browser Service",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Starting Browser Service[/bold]\n\n"
+            f"Mode: {mode}\n"
+            f"Port: {port}\n\n"
+            f"Press Ctrl+C to stop",
+            title="Job Hunter - Browser Service",
+        )
+    )
 
     uvicorn.run(
         "src.browser_service.main:app",

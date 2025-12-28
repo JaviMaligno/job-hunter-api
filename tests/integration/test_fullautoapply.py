@@ -1,29 +1,39 @@
 """Test Full Auto Apply mode."""
-import httpx
+
 import json
-import time
 import sys
+import time
+
+import httpx
 
 BASE_URL = "http://localhost:8000"
+
 
 def main():
     print("Starting Full Auto Apply test...")
 
     # Step 1: Register/Login
     print("\n1. Registering user...")
-    r = httpx.post(f"{BASE_URL}/api/auth/register", json={
-        "email": "fullauto5@example.com",
-        "password": "Test123!",
-        "first_name": "Full",
-        "last_name": "AutoTester"
-    }, timeout=10.0)
-
-    if r.status_code in [400, 422] and ("already registered" in r.text or "already exists" in r.text.lower()):
-        print("   User exists, logging in...")
-        r = httpx.post(f"{BASE_URL}/api/auth/login", json={
+    r = httpx.post(
+        f"{BASE_URL}/api/auth/register",
+        json={
             "email": "fullauto5@example.com",
-            "password": "Test123!"
-        }, timeout=10.0)
+            "password": "Test123!",
+            "first_name": "Full",
+            "last_name": "AutoTester",
+        },
+        timeout=10.0,
+    )
+
+    if r.status_code in [400, 422] and (
+        "already registered" in r.text or "already exists" in r.text.lower()
+    ):
+        print("   User exists, logging in...")
+        r = httpx.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "fullauto5@example.com", "password": "Test123!"},
+            timeout=10.0,
+        )
 
     print(f"   Status: {r.status_code}")
     data = r.json()
@@ -46,7 +56,7 @@ def main():
         json={"url": greenhouse_url},
         headers=headers,
         timeout=30.0,
-        follow_redirects=True
+        follow_redirects=True,
     )
     print(f"   Import status: {r.status_code}")
 
@@ -58,13 +68,22 @@ def main():
         # Try to get existing jobs
         print(f"   Import response: {r.text[:200]}")
         print("   Trying to get existing jobs instead...")
-        r = httpx.get(f"{BASE_URL}/api/jobs/?user_id={user_id}&page_size=5", headers=headers, timeout=10.0, follow_redirects=True)
+        r = httpx.get(
+            f"{BASE_URL}/api/jobs/?user_id={user_id}&page_size=5",
+            headers=headers,
+            timeout=10.0,
+            follow_redirects=True,
+        )
         if r.status_code != 200:
             print(f"   Error getting jobs: {r.text}")
             sys.exit(1)
 
         response_data = r.json()
-        jobs = response_data.get("jobs", response_data) if isinstance(response_data, dict) else response_data
+        jobs = (
+            response_data.get("jobs", response_data)
+            if isinstance(response_data, dict)
+            else response_data
+        )
 
         if not jobs:
             print("   No jobs found!")
@@ -80,7 +99,7 @@ def main():
             job = jobs[0]
 
     print(f"   Selected job: {job['title']} at {job.get('company', 'Unknown')}")
-    job_url = job.get('source_url') or job.get('url')
+    job_url = job.get("source_url") or job.get("url")
     print(f"   URL: {job_url}")
 
     # Step 3: Start Full Auto application
@@ -95,7 +114,7 @@ def main():
         "phone_country_code": "+1",
         "linkedin_url": "https://linkedin.com/in/fullauto",
         "city": "New York",
-        "country": "United States"
+        "country": "United States",
     }
 
     # Sample CV content
@@ -128,11 +147,11 @@ def main():
             "cv_content": cv_content,
             "mode": "auto",  # Full auto mode
             "agent": "claude",  # Use Claude agent (Gemini needs extra setup)
-            "auto_solve_captcha": False  # Don't try to solve CAPTCHAs automatically
+            "auto_solve_captcha": False,  # Don't try to solve CAPTCHAs automatically
         },
         headers=headers,
         timeout=120.0,  # Longer timeout for application
-        follow_redirects=True
+        follow_redirects=True,
     )
 
     print(f"   Status: {r.status_code}")
@@ -153,20 +172,21 @@ def main():
             f"{BASE_URL}/api/applications/{session_id}/status",
             headers=headers,
             timeout=10.0,
-            follow_redirects=True
+            follow_redirects=True,
         )
         status_data = r.json()
         status = status_data.get("status", "unknown")
         print(f"   Poll {i+1}: status={status}")
 
         if status in ["completed", "failed", "needs_intervention"]:
-            print(f"\n5. Final result:")
+            print("\n5. Final result:")
             print(json.dumps(status_data, indent=2))
             break
     else:
         print("   Timeout waiting for completion!")
 
     print("\nTest completed!")
+
 
 if __name__ == "__main__":
     main()

@@ -15,7 +15,6 @@ from src.db.models import User
 from src.db.session import get_db
 from src.integrations.claude.client import get_claude_client
 
-
 # HTTP Bearer security scheme
 security = HTTPBearer(auto_error=False)
 

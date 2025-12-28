@@ -1,7 +1,7 @@
 """Gmail integration using OAuth2 with per-user token storage."""
 
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any
 from uuid import UUID
@@ -12,7 +12,7 @@ from googleapiclient.discovery import build
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import settings, DEFAULT_JOB_EMAIL_SENDERS
+from src.config import DEFAULT_JOB_EMAIL_SENDERS, settings
 from src.db.models import EmailConnection, EmailProvider
 
 # Gmail API scopes - only readonly is required
@@ -22,9 +22,7 @@ SCOPES = [
 ]
 
 
-async def get_user_gmail_credentials(
-    db: AsyncSession, user_id: UUID
-) -> Credentials | None:
+async def get_user_gmail_credentials(db: AsyncSession, user_id: UUID) -> Credentials | None:
     """
     Get Gmail credentials for a specific user from the database.
 
@@ -153,8 +151,7 @@ class GmailClient:
             sender_patterns = custom_senders
         else:
             sender_patterns = [
-                s["pattern"] for s in DEFAULT_JOB_EMAIL_SENDERS
-                if s.get("enabled", True)
+                s["pattern"] for s in DEFAULT_JOB_EMAIL_SENDERS if s.get("enabled", True)
             ]
 
         job_senders = [f"from:{pattern}" for pattern in sender_patterns]
@@ -174,14 +171,21 @@ class GmailClient:
         # Fetch message IDs
         label_ids = labels or ["INBOX"]
         try:
-            results = self.service.users().messages().list(
-                userId="me",
-                q=query,
-                labelIds=label_ids,
-                maxResults=max_results,
-            ).execute()
+            results = (
+                self.service.users()
+                .messages()
+                .list(
+                    userId="me",
+                    q=query,
+                    labelIds=label_ids,
+                    maxResults=max_results,
+                )
+                .execute()
+            )
             print(f"[DEBUG] Gmail API response keys: {results.keys()}")
-            print(f"[DEBUG] Gmail API resultSizeEstimate: {results.get('resultSizeEstimate', 'N/A')}")
+            print(
+                f"[DEBUG] Gmail API resultSizeEstimate: {results.get('resultSizeEstimate', 'N/A')}"
+            )
         except Exception as e:
             print(f"[DEBUG] Gmail API error: {e}")
             raise
@@ -203,11 +207,16 @@ class GmailClient:
         max_results: int = 20,
     ) -> list[dict[str, Any]]:
         """Fetch all unread emails from inbox."""
-        results = self.service.users().messages().list(
-            userId="me",
-            labelIds=["INBOX", "UNREAD"],
-            maxResults=max_results,
-        ).execute()
+        results = (
+            self.service.users()
+            .messages()
+            .list(
+                userId="me",
+                labelIds=["INBOX", "UNREAD"],
+                maxResults=max_results,
+            )
+            .execute()
+        )
 
         messages = results.get("messages", [])
 
@@ -222,11 +231,16 @@ class GmailClient:
     def _get_email_content(self, message_id: str) -> dict[str, Any] | None:
         """Fetch and parse a single email by ID."""
         try:
-            message = self.service.users().messages().get(
-                userId="me",
-                id=message_id,
-                format="full",
-            ).execute()
+            message = (
+                self.service.users()
+                .messages()
+                .get(
+                    userId="me",
+                    id=message_id,
+                    format="full",
+                )
+                .execute()
+            )
 
             headers = {h["name"]: h["value"] for h in message["payload"]["headers"]}
 
@@ -345,10 +359,15 @@ class GmailClient:
                 "labelListVisibility": "labelShow",
                 "messageListVisibility": "show",
             }
-            created = self.service.users().labels().create(
-                userId="me",
-                body=label_body,
-            ).execute()
+            created = (
+                self.service.users()
+                .labels()
+                .create(
+                    userId="me",
+                    body=label_body,
+                )
+                .execute()
+            )
 
             return created["id"]
         except Exception:

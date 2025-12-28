@@ -54,7 +54,9 @@ class SessionCreateRequest(BaseModel):
     viewport_height: int = Field(default=720, ge=600, le=2160)
     user_agent: str | None = None
     timeout: int = Field(default=30000, ge=5000, le=120000, description="Default timeout in ms")
-    devtools_url: str | None = Field(default=None, description="Chrome DevTools URL for chrome-devtools mode")
+    devtools_url: str | None = Field(
+        default=None, description="Chrome DevTools URL for chrome-devtools mode"
+    )
 
 
 class SessionCreateResponse(BaseModel):

@@ -1,9 +1,9 @@
 """Tests for LinkedIn OAuth integration."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from uuid import uuid4
 from datetime import datetime, timedelta
+from uuid import uuid4
+
+import pytest
 
 from src.db.models import EmailConnection, EmailProvider
 
@@ -43,8 +43,7 @@ class TestLinkedInClient:
         from src.integrations.linkedin.client import LinkedInClient
 
         client = LinkedInClient(
-            access_token="test_access_token",
-            refresh_token="test_refresh_token"
+            access_token="test_access_token", refresh_token="test_refresh_token"
         )
 
         assert client.access_token == "test_access_token"
@@ -123,4 +122,8 @@ class TestLinkedInRouterRegistration:
                         route_paths.append(f"{route.path}{subroute.path}")
 
         # The routes should be registered under /api/linkedin
-        assert any("/api/linkedin" in str(route) for route in app.routes if hasattr(route, "path") or hasattr(route, "prefix"))
+        assert any(
+            "/api/linkedin" in str(route)
+            for route in app.routes
+            if hasattr(route, "path") or hasattr(route, "prefix")
+        )

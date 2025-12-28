@@ -13,10 +13,15 @@ from src.automation.blockers import (
     DetectedBlocker,
 )
 from src.automation.client import BrowserServiceClient
-from src.automation.strategies import ATSStrategy, ATSStrategyRegistry, CaptchaResult
 
 # Import strategies to register them
-from src.automation.strategies import breezy, generic  # noqa: F401
+from src.automation.strategies import (  # noqa: F401
+    ATSStrategy,
+    ATSStrategyRegistry,
+    CaptchaResult,
+    breezy,
+    generic,
+)
 
 __all__ = [
     # Client

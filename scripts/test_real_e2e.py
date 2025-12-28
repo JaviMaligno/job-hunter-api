@@ -6,14 +6,13 @@ This script tests the full automation flow with real user data and a real job UR
 """
 
 import asyncio
-import httpx
-import json
 import sys
-from pathlib import Path
+
+import httpx
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 API_URL = "http://localhost:8000"
 
@@ -147,7 +146,7 @@ TEST_JOBS = [
 async def test_v2_start(job_url: str, agent: str = "gemini"):
     """Test the v2/start endpoint with real data."""
     print(f"\n{'='*60}")
-    print(f"Testing V2 Application Start")
+    print("Testing V2 Application Start")
     print(f"Job URL: {job_url}")
     print(f"Agent: {agent}")
     print(f"{'='*60}\n")
@@ -177,19 +176,19 @@ async def test_v2_start(job_url: str, agent: str = "gemini"):
 
             if response.status_code == 200:
                 result = response.json()
-                print(f"\n✅ SUCCESS!")
+                print("\n✅ SUCCESS!")
                 print(f"Session ID: {result.get('session_id')}")
                 print(f"Status: {result.get('status')}")
                 print(f"Agent Used: {result.get('agent_used')}")
                 print(f"Current URL: {result.get('current_url')}")
 
-                if result.get('fields_filled'):
+                if result.get("fields_filled"):
                     print(f"\nFields Filled ({len(result['fields_filled'])}):")
-                    for field in result['fields_filled'][:5]:
+                    for field in result["fields_filled"][:5]:
                         print(f"  - {field.get('field_name')}: {field.get('value')[:50]}...")
 
-                if result.get('intervention_required'):
-                    print(f"\n⚠️ INTERVENTION REQUIRED")
+                if result.get("intervention_required"):
+                    print("\n⚠️ INTERVENTION REQUIRED")
                     print(f"Intervention ID: {result.get('intervention_id')}")
                     print(f"Blocker Type: {result.get('blocker_type')}")
                     print(f"Blocker Details: {result.get('blocker_details')}")
@@ -235,9 +234,9 @@ async def list_interventions():
 
 
 async def main():
-    print("="*60)
+    print("=" * 60)
     print("REAL E2E TEST - Job Application Automation")
-    print("="*60)
+    print("=" * 60)
 
     # Show available jobs
     print("\nAvailable test jobs:")
@@ -256,9 +255,9 @@ async def main():
     result = await test_v2_start(job_url, agent="gemini")
 
     if result:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("POST-TEST STATUS")
-        print("="*60)
+        print("=" * 60)
         await list_sessions()
         await list_interventions()
 

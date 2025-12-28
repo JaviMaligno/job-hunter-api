@@ -1,12 +1,8 @@
 """Tests for database models."""
 
 import uuid
-from datetime import datetime
-
-import pytest
 
 from src.db.models import (
-    Application,
     ApplicationMode,
     ApplicationStatus,
     BlockerType,

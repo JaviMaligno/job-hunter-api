@@ -119,7 +119,9 @@ class CoverLetterInput(BaseModel):
     job_title: str = Field(description="Job title")
     company: str = Field(description="Company name")
     language: str = Field(default="en", description="Output language: 'en' or 'es'")
-    tone: str = Field(default="professional", description="Tone: professional, enthusiastic, casual")
+    tone: str = Field(
+        default="professional", description="Tone: professional, enthusiastic, casual"
+    )
 
 
 class CoverLetterOutput(BaseModel):

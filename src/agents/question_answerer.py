@@ -111,12 +111,14 @@ If you cannot answer a question based on the provided information:
             except Exception as e:
                 logger.error(f"Failed to answer question: {e}")
                 unanswered.append(question.question_text)
-                answers.append(QuestionAnswer(
-                    question_text=question.question_text,
-                    answer="",
-                    confidence=0.0,
-                    reasoning=f"Error: {e}",
-                ))
+                answers.append(
+                    QuestionAnswer(
+                        question_text=question.question_text,
+                        answer="",
+                        confidence=0.0,
+                        reasoning=f"Error: {e}",
+                    )
+                )
 
         return QuestionAnswererOutput(
             answers=answers,
@@ -137,7 +139,7 @@ If you cannot answer a question based on the provided information:
         if context.job_description:
             context_parts.append(f"Job Description:\n{context.job_description[:2000]}")
 
-        context_parts.append(f"\nCandidate Profile:")
+        context_parts.append("\nCandidate Profile:")
         context_parts.append(f"Name: {context.user_data.first_name} {context.user_data.last_name}")
         if context.user_data.current_title:
             context_parts.append(f"Current Title: {context.user_data.current_title}")
@@ -187,12 +189,15 @@ For text/textarea, provide a natural language answer."""
 
         # Parse response
         import json
+
         try:
             # Extract JSON from response
             clean_response = response.strip()
             if clean_response.startswith("```"):
                 lines = clean_response.split("\n")
-                clean_response = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+                clean_response = "\n".join(
+                    lines[1:-1] if lines[-1].startswith("```") else lines[1:]
+                )
 
             # Find JSON object
             start = clean_response.find("{")

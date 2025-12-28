@@ -5,9 +5,8 @@ Revises: e1f2a3b4c5d6
 Create Date: 2025-12-28
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "f2a3b4c5d6e7"
@@ -26,10 +25,14 @@ def upgrade() -> None:
 
     # Convert the auth_provider column from varchar to enum
     # First, update any existing values to uppercase (if any)
-    op.execute("UPDATE users SET auth_provider = UPPER(auth_provider) WHERE auth_provider IS NOT NULL")
+    op.execute(
+        "UPDATE users SET auth_provider = UPPER(auth_provider) WHERE auth_provider IS NOT NULL"
+    )
 
     # Alter the column to use the enum type
-    op.execute("ALTER TABLE users ALTER COLUMN auth_provider TYPE authprovider USING auth_provider::authprovider")
+    op.execute(
+        "ALTER TABLE users ALTER COLUMN auth_provider TYPE authprovider USING auth_provider::authprovider"
+    )
 
     # Add the default back as an enum value
     op.execute("ALTER TABLE users ALTER COLUMN auth_provider SET DEFAULT 'EMAIL'")
@@ -37,7 +40,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Convert back to varchar
-    op.execute("ALTER TABLE users ALTER COLUMN auth_provider TYPE VARCHAR(50) USING auth_provider::text")
+    op.execute(
+        "ALTER TABLE users ALTER COLUMN auth_provider TYPE VARCHAR(50) USING auth_provider::text"
+    )
 
     # Drop the enum type
     op.execute("DROP TYPE authprovider")

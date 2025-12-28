@@ -1,7 +1,6 @@
 """Unit tests for agents."""
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -52,9 +51,7 @@ class TestCVAdapterAgent:
         assert len(output.key_highlights) == 3
 
     @pytest.mark.asyncio
-    async def test_cv_adapter_run(
-        self, sample_cv, sample_job_description, cv_adapter_output_json
-    ):
+    async def test_cv_adapter_run(self, sample_cv, sample_job_description, cv_adapter_output_json):
         """Test full CV adaptation run with mocked Claude."""
         with patch("src.agents.base.get_claude_client") as mock_get_client:
             # Setup mock

@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from src.db.models import ApplicationMode, BlockerType, JobStatus, MaterialType
 
-
 # ============================================================================
 # User Schemas
 # ============================================================================
@@ -227,9 +226,15 @@ class EmailSender(BaseModel):
 class EmailSenderPreferences(BaseModel):
     """Schema for user's email sender preferences."""
 
-    senders: list[EmailSender] = Field(default_factory=list, description="Custom senders added by user")
-    enabled_sender_ids: list[str] = Field(default_factory=list, description="IDs of default senders user has enabled")
-    disabled_sender_ids: list[str] = Field(default_factory=list, description="IDs of default senders user has disabled")
+    senders: list[EmailSender] = Field(
+        default_factory=list, description="Custom senders added by user"
+    )
+    enabled_sender_ids: list[str] = Field(
+        default_factory=list, description="IDs of default senders user has enabled"
+    )
+    disabled_sender_ids: list[str] = Field(
+        default_factory=list, description="IDs of default senders user has disabled"
+    )
 
 
 class EmailSenderPreferencesUpdate(BaseModel):
@@ -237,8 +242,12 @@ class EmailSenderPreferencesUpdate(BaseModel):
 
     enabled_sender_ids: list[str] | None = Field(default=None, description="Sender IDs to enable")
     disabled_sender_ids: list[str] | None = Field(default=None, description="Sender IDs to disable")
-    custom_senders: list[EmailSender] | None = Field(default=None, description="Custom senders to add")
-    remove_sender_ids: list[str] | None = Field(default=None, description="Custom sender IDs to remove")
+    custom_senders: list[EmailSender] | None = Field(
+        default=None, description="Custom senders to add"
+    )
+    remove_sender_ids: list[str] | None = Field(
+        default=None, description="Custom sender IDs to remove"
+    )
 
 
 class EmailSenderPreferencesResponse(BaseModel):
@@ -246,4 +255,6 @@ class EmailSenderPreferencesResponse(BaseModel):
 
     default_senders: list[EmailSender] = Field(..., description="All default senders")
     user_preferences: EmailSenderPreferences = Field(..., description="User's customizations")
-    effective_senders: list[EmailSender] = Field(..., description="Final merged list of active senders")
+    effective_senders: list[EmailSender] = Field(
+        ..., description="Final merged list of active senders"
+    )

@@ -20,61 +20,48 @@ from pathlib import Path
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        description="Run the Job Application Automation Pipeline"
+    parser = argparse.ArgumentParser(description="Run the Job Application Automation Pipeline")
+    parser.add_argument("--user-id", "-u", required=True, help="User ID to process jobs for")
+    parser.add_argument(
+        "--max", "-m", type=int, default=5, help="Maximum applications per run (default: 5)"
     )
     parser.add_argument(
-        "--user-id", "-u",
-        required=True,
-        help="User ID to process jobs for"
+        "--delay", "-d", type=int, default=30, help="Seconds between applications (default: 30)"
     )
     parser.add_argument(
-        "--max", "-m",
-        type=int,
-        default=5,
-        help="Maximum applications per run (default: 5)"
-    )
-    parser.add_argument(
-        "--delay", "-d",
-        type=int,
-        default=30,
-        help="Seconds between applications (default: 30)"
-    )
-    parser.add_argument(
-        "--job-ids", "-j",
-        help="Comma-separated job IDs to process (default: all eligible)"
+        "--job-ids", "-j", help="Comma-separated job IDs to process (default: all eligible)"
     )
     parser.add_argument(
         "--auto-submit",
         action="store_true",
-        help="Auto-submit without pausing for review (use with caution!)"
+        help="Auto-submit without pausing for review (use with caution!)",
     )
     parser.add_argument(
         "--api-url",
         default="http://localhost:8000",
-        help="API URL (default: http://localhost:8000)"
+        help="API URL (default: http://localhost:8000)",
     )
     parser.add_argument(
-        "--scan-email",
-        action="store_true",
-        help="Scan email for new jobs before applying"
+        "--scan-email", action="store_true", help="Scan email for new jobs before applying"
     )
 
     args = parser.parse_args()
 
     # Import after path setup
-    from src.automation.application_pipeline import ApplicationPipeline
     import httpx
+
+    from src.automation.application_pipeline import ApplicationPipeline
 
     print("=" * 60)
     print("JOB APPLICATION AUTOMATION PIPELINE")
@@ -92,7 +79,7 @@ async def main():
             response = await client.post(
                 f"{args.api_url}/api/gmail/scan/{args.user_id}",
                 params={"save_jobs": True},
-                json={"max_emails": 30}
+                json={"max_emails": 30},
             )
             if response.status_code == 200:
                 result = response.json()

@@ -1,13 +1,9 @@
 """Tests for Application Pipeline improvements."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from uuid import uuid4
-
 from src.automation.application_pipeline import (
+    ApplicationAttempt,
     ApplicationPipeline,
     ApplicationResult,
-    ApplicationAttempt,
     PipelineReport,
 )
 

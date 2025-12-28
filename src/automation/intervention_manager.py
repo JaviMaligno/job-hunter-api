@@ -8,9 +8,10 @@ human intervention (CAPTCHA, login, file upload issues, etc.).
 import asyncio
 import logging
 import uuid
+from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class InterventionType(str, Enum):
     """Type of intervention required."""
+
     CAPTCHA = "captcha"
     LOGIN_REQUIRED = "login_required"
     FILE_UPLOAD = "file_upload"
@@ -36,6 +38,7 @@ class InterventionType(str, Enum):
 
 class InterventionStatus(str, Enum):
     """Status of an intervention request."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     RESOLVED = "resolved"
@@ -45,6 +48,7 @@ class InterventionStatus(str, Enum):
 
 class InterventionRequest(BaseModel):
     """A request for human intervention."""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str
     job_id: str | None = None
@@ -85,6 +89,7 @@ class InterventionRequest(BaseModel):
 
 class InterventionResolution(BaseModel):
     """Resolution of an intervention."""
+
     action: str  # continue, submit, cancel, retry
     notes: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -122,9 +127,7 @@ class InterventionManager:
         self._resolution_events: dict[str, asyncio.Event] = {}
         self._resolutions: dict[str, InterventionResolution] = {}
 
-        self._callbacks: list[
-            Callable[[InterventionRequest], Coroutine[Any, Any, None]]
-        ] = []
+        self._callbacks: list[Callable[[InterventionRequest], Coroutine[Any, Any, None]]] = []
         self._resolution_callbacks: list[
             Callable[[InterventionRequest, InterventionResolution], Coroutine[Any, Any, None]]
         ] = []
@@ -211,11 +214,7 @@ class InterventionManager:
         Returns:
             InterventionRequest object
         """
-        timeout = (
-            timedelta(minutes=timeout_minutes)
-            if timeout_minutes
-            else self._default_timeout
-        )
+        timeout = timedelta(minutes=timeout_minutes) if timeout_minutes else self._default_timeout
 
         intervention = InterventionRequest(
             session_id=session_id,
@@ -293,7 +292,7 @@ class InterventionManager:
             await asyncio.wait_for(event.wait(), timeout=timeout)
             resolution = self._resolutions.get(intervention_id)
             return resolution, self._interventions.get(intervention_id)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info(f"Intervention {intervention_id} timed out")
             intervention.status = InterventionStatus.TIMED_OUT
             return None, intervention
@@ -368,8 +367,7 @@ class InterventionManager:
             List of pending interventions
         """
         pending = [
-            i for i in self._interventions.values()
-            if i.status == InterventionStatus.PENDING
+            i for i in self._interventions.values() if i.status == InterventionStatus.PENDING
         ]
 
         if user_id:
@@ -382,10 +380,7 @@ class InterventionManager:
         session_id: str,
     ) -> list[InterventionRequest]:
         """Get all interventions for a session."""
-        return [
-            i for i in self._interventions.values()
-            if i.session_id == session_id
-        ]
+        return [i for i in self._interventions.values() if i.session_id == session_id]
 
     async def cancel(self, intervention_id: str) -> bool:
         """Cancel an intervention."""

@@ -18,7 +18,7 @@ import re
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from TwoCaptcha import TwoCaptcha
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class CaptchaType(str, Enum):
     """Supported CAPTCHA types."""
+
     TURNSTILE = "turnstile"  # Cloudflare
     HCAPTCHA = "hcaptcha"
     RECAPTCHA_V2 = "recaptcha_v2"
@@ -34,6 +35,7 @@ class CaptchaType(str, Enum):
 
 class CaptchaSolveResult(BaseModel):
     """Result of a CAPTCHA solve attempt."""
+
     success: bool
     token: str | None = None
     captcha_type: CaptchaType | None = None
@@ -44,6 +46,7 @@ class CaptchaSolveResult(BaseModel):
 
 class CaptchaConfig(BaseModel):
     """Configuration for CAPTCHA solving."""
+
     api_key: str
     # Pricing per solve (approximate, varies by type)
     price_turnstile: float = 0.002
@@ -200,6 +203,7 @@ class CaptchaSolver:
             )
 
         import time
+
         start_time = time.time()
 
         try:
@@ -215,10 +219,7 @@ class CaptchaSolver:
             solve_time = time.time() - start_time
             cost = self._get_cost(captcha_type)
 
-            logger.info(
-                f"Solved {captcha_type.value} in {solve_time:.1f}s "
-                f"(cost: ${cost:.4f})"
-            )
+            logger.info(f"Solved {captcha_type.value} in {solve_time:.1f}s " f"(cost: ${cost:.4f})")
 
             return CaptchaSolveResult(
                 success=True,

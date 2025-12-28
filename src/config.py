@@ -150,7 +150,12 @@ DEFAULT_JOB_EMAIL_SENDERS: list[dict] = [
     {"id": "workable", "name": "Workable", "pattern": "workable.com", "enabled": True},
     {"id": "bamboohr", "name": "BambooHR", "pattern": "bamboohr.com", "enabled": False},
     {"id": "ashby", "name": "Ashby", "pattern": "ashbyhq.com", "enabled": False},
-    {"id": "smartrecruiters", "name": "SmartRecruiters", "pattern": "smartrecruiters.com", "enabled": False},
+    {
+        "id": "smartrecruiters",
+        "name": "SmartRecruiters",
+        "pattern": "smartrecruiters.com",
+        "enabled": False,
+    },
     # Regional Platforms
     {"id": "totaljobs", "name": "TotalJobs", "pattern": "totaljobs.com", "enabled": False},
     {"id": "reed", "name": "Reed", "pattern": "reed.co.uk", "enabled": False},

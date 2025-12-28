@@ -20,13 +20,12 @@ Usage:
 
 import asyncio
 import sys
-import json
+
 import httpx
-import websockets
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 BASE_URL = "http://localhost:8000"
 
@@ -44,7 +43,9 @@ async def test_health():
                 print(f"  [FAIL] Status: {response.status_code}")
                 return False
         except httpx.ConnectError:
-            print("  [FAIL] Server not running. Start with: poetry run uvicorn src.main:app --reload --port 8000")
+            print(
+                "  [FAIL] Server not running. Start with: poetry run uvicorn src.main:app --reload --port 8000"
+            )
             return False
 
 
@@ -117,11 +118,11 @@ async def test_start_application_mock():
 
             if response.status_code == 200:
                 result = response.json()
-                print(f"  [OK] Started application")
+                print("  [OK] Started application")
                 print(f"      session_id: {result['session_id']}")
                 print(f"      status: {result['status']}")
                 print(f"      agent_used: {result['agent_used']}")
-                return result['session_id']
+                return result["session_id"]
             elif response.status_code == 422:
                 print(f"  [FAIL] Validation error: {response.json()}")
                 return None
@@ -193,7 +194,9 @@ async def test_agent_selection():
                         print(f"  [FAIL] agent='{agent_type}' unexpectedly rejected")
                 else:
                     if should_succeed:
-                        print(f"  [OK] agent='{agent_type}' accepted (status={response.status_code})")
+                        print(
+                            f"  [OK] agent='{agent_type}' accepted (status={response.status_code})"
+                        )
                     else:
                         print(f"  [FAIL] agent='{agent_type}' should have been rejected")
 
@@ -227,6 +230,7 @@ async def main():
     # Test WebSocket if available
     try:
         import websockets
+
         await test_websocket_interventions()
     except ImportError:
         print("\n=== Test 5: WebSocket (skipped) ===")

@@ -11,8 +11,8 @@ Based on POC findings:
 import logging
 from typing import Any
 
-from src.automation.models import UserFormData
 from src.automation.client import BrowserServiceClient
+from src.automation.models import UserFormData
 from src.automation.strategies.base import ATSStrategy, FormFillResult, SubmitResult
 from src.automation.strategies.registry import ATSStrategyRegistry
 
@@ -93,27 +93,33 @@ class BreezyStrategy(ATSStrategy):
 
         # Breezy-specific analysis
         has_resume_upload = any(
-            f.field_type == "file" and
-            ("resume" in (f.field_name or "").lower() or
-             "cv" in (f.field_name or "").lower())
+            f.field_type == "file"
+            and ("resume" in (f.field_name or "").lower() or "cv" in (f.field_name or "").lower())
             for f in dom.form_fields
         )
 
         has_cover_letter = any(
-            f.field_type == "textarea" and
-            "cover" in (f.field_name or f.label or "").lower()
+            f.field_type == "textarea" and "cover" in (f.field_name or f.label or "").lower()
             for f in dom.form_fields
         )
 
         # Check for custom questions (non-standard fields)
         standard_names = {
-            "first_name", "last_name", "email", "phone",
-            "linkedin", "resume", "cover", "portfolio",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "linkedin",
+            "resume",
+            "cover",
+            "portfolio",
         }
         custom_questions = [
-            f for f in dom.form_fields
-            if f.is_visible and f.is_enabled and
-            not any(s in (f.field_name or f.label or "").lower() for s in standard_names)
+            f
+            for f in dom.form_fields
+            if f.is_visible
+            and f.is_enabled
+            and not any(s in (f.field_name or f.label or "").lower() for s in standard_names)
         ]
 
         return {
@@ -245,7 +251,7 @@ class BreezyStrategy(ATSStrategy):
         # Breezy-specific submit button selectors
         submit_selectors = [
             'button[type="submit"]',
-            'button.btn-primary',
+            "button.btn-primary",
             'button:has-text("Submit Application")',
             'button:has-text("Apply")',
             'input[type="submit"]',
@@ -260,6 +266,7 @@ class BreezyStrategy(ATSStrategy):
 
                     # Wait for confirmation
                     import asyncio
+
                     await asyncio.sleep(2)
 
                     current_url = await client.get_current_url()
@@ -273,10 +280,7 @@ class BreezyStrategy(ATSStrategy):
                         "we'll be in touch",
                     ]
 
-                    is_success = any(
-                        ind in page_content.lower()
-                        for ind in success_indicators
-                    )
+                    is_success = any(ind in page_content.lower() for ind in success_indicators)
 
                     if is_success:
                         return SubmitResult(

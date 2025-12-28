@@ -87,7 +87,7 @@ class ChromeDevToolsMCP:
 
         # Initialize the session
         result = await self._session.initialize()
-        server_info = getattr(result, 'serverInfo', getattr(result, 'server_info', None))
+        server_info = getattr(result, "serverInfo", getattr(result, "server_info", None))
         logger.info(f"MCP session initialized: {server_info}")
 
         # Cache available tools
@@ -104,6 +104,7 @@ class ChromeDevToolsMCP:
         anyio may raise RuntimeError about cancel scopes. This is expected
         and safely handled. Uses a timeout to prevent hanging.
         """
+
         async def _close_with_timeout():
             try:
                 if self._session:
@@ -123,7 +124,9 @@ class ChromeDevToolsMCP:
                     except (RuntimeError, BaseExceptionGroup) as e:
                         # Handle anyio cancel scope errors and exception groups
                         # These are expected when closing from a different task
-                        logger.debug(f"Context manager close (expected in cross-task scenarios): {e}")
+                        logger.debug(
+                            f"Context manager close (expected in cross-task scenarios): {e}"
+                        )
                     finally:
                         self._context_manager = None
             except Exception as e:
@@ -132,7 +135,7 @@ class ChromeDevToolsMCP:
         try:
             # Use timeout to prevent hanging during close
             await asyncio.wait_for(_close_with_timeout(), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("MCP close timed out after 5s, forcing cleanup")
             self._session = None
             self._context_manager = None
@@ -224,10 +227,7 @@ class ChromeDevToolsMCP:
         return self._parse_result(result)
 
     async def wait_for(
-        self,
-        selector: str | None = None,
-        timeout: int = 30000,
-        state: str = "visible"
+        self, selector: str | None = None, timeout: int = 30000, state: str = "visible"
     ) -> dict[str, Any]:
         """Wait for element/condition.
 
@@ -260,10 +260,13 @@ class ChromeDevToolsMCP:
         Returns:
             Fill result
         """
-        result = await self.call_tool("fill", {
-            "uid": uid,
-            "value": value,
-        })
+        result = await self.call_tool(
+            "fill",
+            {
+                "uid": uid,
+                "value": value,
+            },
+        )
         return self._parse_result(result)
 
     async def fill_form(self, fields: list[dict[str, str]]) -> dict[str, Any]:
@@ -302,11 +305,7 @@ class ChromeDevToolsMCP:
         result = await self.call_tool("hover", {"uid": uid})
         return self._parse_result(result)
 
-    async def drag(
-        self,
-        source_uid: str,
-        target_uid: str
-    ) -> dict[str, Any]:
+    async def drag(self, source_uid: str, target_uid: str) -> dict[str, Any]:
         """Drag from one element to another.
 
         Args:
@@ -316,10 +315,13 @@ class ChromeDevToolsMCP:
         Returns:
             Drag result
         """
-        result = await self.call_tool("drag", {
-            "sourceUid": source_uid,
-            "targetUid": target_uid,
-        })
+        result = await self.call_tool(
+            "drag",
+            {
+                "sourceUid": source_uid,
+                "targetUid": target_uid,
+            },
+        )
         return self._parse_result(result)
 
     async def upload_file(self, uid: str, file_path: str) -> dict[str, Any]:
@@ -332,10 +334,13 @@ class ChromeDevToolsMCP:
         Returns:
             Upload result
         """
-        result = await self.call_tool("upload_file", {
-            "uid": uid,
-            "filePath": file_path,
-        })
+        result = await self.call_tool(
+            "upload_file",
+            {
+                "uid": uid,
+                "filePath": file_path,
+            },
+        )
         return self._parse_result(result)
 
     async def press_key(self, key: str, uid: str | None = None) -> dict[str, Any]:
@@ -503,7 +508,7 @@ class ChromeDevToolsMCP:
             text = str(result) if result else ""
 
         # Try to extract JSON from markdown code block
-        match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+        match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group(1))
@@ -530,18 +535,19 @@ class ChromeDevToolsMCP:
             Parsed result dict
         """
         # MCP results come as CallToolResult with content
-        if hasattr(result, 'content'):
+        if hasattr(result, "content"):
             content = result.content
             if isinstance(content, list) and len(content) > 0:
                 first = content[0]
-                if hasattr(first, 'text'):
+                if hasattr(first, "text"):
                     # Try to parse as JSON
                     import json
+
                     try:
                         return json.loads(first.text)
                     except json.JSONDecodeError:
                         return {"text": first.text}
-                elif hasattr(first, 'data'):
+                elif hasattr(first, "data"):
                     return {"data": first.data}
             return {"content": content}
         return {"result": result}
