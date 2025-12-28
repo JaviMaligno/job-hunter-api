@@ -21,12 +21,18 @@ def upgrade() -> None:
     # Use uppercase values to match how SQLAlchemy generates them
     op.execute("CREATE TYPE authprovider AS ENUM ('EMAIL', 'GOOGLE', 'LINKEDIN', 'GITHUB')")
 
+    # Drop the default first (it's a string and can't be cast)
+    op.execute("ALTER TABLE users ALTER COLUMN auth_provider DROP DEFAULT")
+
     # Convert the auth_provider column from varchar to enum
     # First, update any existing values to uppercase (if any)
     op.execute("UPDATE users SET auth_provider = UPPER(auth_provider) WHERE auth_provider IS NOT NULL")
 
     # Alter the column to use the enum type
     op.execute("ALTER TABLE users ALTER COLUMN auth_provider TYPE authprovider USING auth_provider::authprovider")
+
+    # Add the default back as an enum value
+    op.execute("ALTER TABLE users ALTER COLUMN auth_provider SET DEFAULT 'EMAIL'")
 
 
 def downgrade() -> None:
