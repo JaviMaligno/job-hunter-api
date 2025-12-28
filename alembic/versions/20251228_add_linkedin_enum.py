@@ -16,9 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add 'linkedin' to the emailprovider enum
+    # Add 'LINKEDIN' to the emailprovider enum (uppercase to match existing values)
     # PostgreSQL allows adding values to enums
-    op.execute("ALTER TYPE emailprovider ADD VALUE IF NOT EXISTS 'linkedin'")
+    op.execute("ALTER TYPE emailprovider ADD VALUE IF NOT EXISTS 'LINKEDIN'")
 
 
 def downgrade() -> None:
