@@ -12,10 +12,20 @@ jobs:
     steps:
       - name: Ping API health endpoint
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://job-hunter-api-kdyd.onrender.com/health)
-          if [ "$response" -eq 200 ]; then
-            echo "Health check passed (HTTP $response)"
-          else
-            echo "Health check failed (HTTP $response)"
-            exit 1
-          fi
+          # Render free tier can take up to 60s to wake from sleep
+          # Retry up to 3 times with 120s timeout each
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt of 3..."
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 https://job-hunter-api-kdyd.onrender.com/health || echo "000")
+            if [ "$response" -eq 200 ]; then
+              echo "Health check passed (HTTP $response)"
+              exit 0
+            fi
+            echo "Attempt $attempt failed (HTTP $response)"
+            if [ $attempt -lt 3 ]; then
+              echo "Waiting 10s before retry..."
+              sleep 10
+            fi
+          done
+          echo "All attempts failed"
+          exit 1
