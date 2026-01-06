@@ -19,10 +19,109 @@ from src.agents.cv_adapter import (
     CVAdapterAgent,
     CVAdapterInput,
 )
+from src.config import settings
 from src.db.models import Job, JobStatus, User
-from src.integrations.email.parser import parse_job_email
+from src.integrations.email.parser import ExtractedJob, parse_job_email
 
 logger = logging.getLogger(__name__)
+
+
+async def parse_email_with_gemini(
+    body: str, subject: str, sender: str
+) -> list[ExtractedJob]:
+    """Parse email content using Gemini AI for better extraction.
+
+    Falls back to empty list if Gemini is not configured or fails.
+    """
+    if not settings.gemini_api_key:
+        logger.warning("GEMINI_API_KEY not configured, skipping AI parsing")
+        return []
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=settings.gemini_api_key)
+
+        # Clean HTML for better parsing
+        from src.scraper.content_cleaner import clean_html_for_extraction
+        cleaned_body = clean_html_for_extraction(body, max_length=15000)
+
+        prompt = f"""Extract job postings from this email alert.
+
+Email Subject: {subject}
+Email From: {sender}
+
+Email Content:
+{cleaned_body}
+
+For each job found, extract:
+- title: Job title
+- company: Company name
+- location: Location (city, country, or "Remote")
+- job_url: Application URL if available
+
+Return a JSON array of jobs. Example:
+[{{"title": "Software Engineer", "company": "Google", "location": "London, UK", "job_url": "https://..."}}]
+
+If no jobs are found, return an empty array: []
+Only return valid JSON, no markdown or explanation."""
+
+        # Try with available Gemini models
+        models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+
+        for model_name in models:
+            try:
+                response = await client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=4096,
+                    ),
+                )
+
+                if response.text:
+                    import json
+                    # Clean response
+                    text = response.text.strip()
+                    if text.startswith("```json"):
+                        text = text[7:]
+                    if text.startswith("```"):
+                        text = text[3:]
+                    if text.endswith("```"):
+                        text = text[:-3]
+                    text = text.strip()
+
+                    jobs_data = json.loads(text)
+
+                    if not isinstance(jobs_data, list):
+                        jobs_data = [jobs_data]
+
+                    extracted = []
+                    for job in jobs_data:
+                        if job.get("title"):
+                            extracted.append(ExtractedJob(
+                                title=job.get("title", ""),
+                                company=job.get("company", "Unknown"),
+                                location=job.get("location"),
+                                job_url=job.get("job_url"),
+                                source_platform="linkedin" if "linkedin" in sender.lower() else "email",
+                            ))
+
+                    if extracted:
+                        logger.info(f"Gemini extracted {len(extracted)} jobs from email")
+                        return extracted
+
+            except Exception as e:
+                logger.warning(f"Gemini model {model_name} failed: {e}")
+                continue
+
+        return []
+
+    except Exception as e:
+        logger.exception(f"Gemini email parsing failed: {e}")
+        return []
 
 
 @dataclass
@@ -148,11 +247,21 @@ class EmailPipelineService:
 
         # Step 1: Extract jobs from email
         try:
+            body = email_content.get("body", "")
+            sender = email_content.get("sender", "")
+            subject = email_content.get("subject", "")
+
+            # Try regex parsing first (fast, no API cost)
             extracted_jobs = parse_job_email(
-                body=email_content.get("body", ""),
-                sender=email_content.get("sender", ""),
-                subject=email_content.get("subject", ""),
+                body=body,
+                sender=sender,
+                subject=subject,
             )
+
+            # If regex fails, try Gemini AI parsing
+            if not extracted_jobs:
+                logger.info("Regex parsing found no jobs, trying Gemini AI...")
+                extracted_jobs = await parse_email_with_gemini(body, subject, sender)
 
             result.jobs_extracted = [
                 {
