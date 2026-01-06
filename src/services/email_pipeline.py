@@ -26,6 +26,31 @@ from src.integrations.email.parser import ExtractedJob, parse_job_email
 logger = logging.getLogger(__name__)
 
 
+def _clean_email_html(html_content: str, max_length: int = 15000) -> str:
+    """Simple HTML cleaning for email content using BeautifulSoup only."""
+    import re
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Remove script, style, and other noise elements
+    for tag in soup.find_all(["script", "style", "noscript", "iframe", "svg"]):
+        tag.decompose()
+
+    # Extract text with some structure preserved
+    text = soup.get_text(separator="\n", strip=True)
+
+    # Clean up excessive whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
+
+    # Truncate if needed
+    if len(text) > max_length:
+        text = text[:max_length]
+
+    return text.strip()
+
+
 async def parse_email_with_gemini(
     body: str, subject: str, sender: str
 ) -> list[ExtractedJob]:
@@ -43,9 +68,8 @@ async def parse_email_with_gemini(
 
         client = genai.Client(api_key=settings.gemini_api_key)
 
-        # Clean HTML for better parsing
-        from src.scraper.content_cleaner import clean_html_for_extraction
-        cleaned_body = clean_html_for_extraction(body, max_length=15000)
+        # Clean HTML for better parsing (using simple BeautifulSoup-based cleaning)
+        cleaned_body = _clean_email_html(body, max_length=15000)
 
         prompt = f"""Extract job postings from this email alert.
 
