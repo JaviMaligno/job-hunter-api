@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
+    # Webhook API Key (for Make.com, Zapier, etc.)
+    webhook_api_key: str | None = None
+
     # Rate Limiting
     max_applications_per_day: int = Field(default=10, ge=1, le=100)
     max_auto_applications_per_day: int = Field(default=5, ge=1, le=50)
