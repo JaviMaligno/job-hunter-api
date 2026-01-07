@@ -275,11 +275,27 @@ async def adapt_cv_for_job(
     # Get job description from URL if needed
     job_description = request.job_description
     if not job_description and request.job_url:
-        # TODO: Implement web scraping for job description
-        raise HTTPException(
-            status_code=501,
-            detail="Job URL scraping not yet implemented. Please provide job_description directly.",
-        )
+        # Scrape job description from URL
+        from src.integrations.jobs.scraper import scrape_job_url
+
+        logger.info(f"Scraping job description from URL: {request.job_url}")
+        scraped = await scrape_job_url(request.job_url)
+
+        if scraped.success and scraped.description:
+            job_description = scraped.description
+            logger.info(f"Successfully scraped job description ({len(job_description)} chars)")
+            # Also use scraped title/company if not provided
+            if not request.job_title and scraped.title:
+                request.job_title = scraped.title
+            if not request.company and scraped.company:
+                request.company = scraped.company
+        else:
+            error_msg = scraped.error or "Could not extract job description from URL"
+            logger.warning(f"Scraping failed: {error_msg}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Could not scrape job from URL: {error_msg}. Please provide job_description directly.",
+            )
 
     # Get API key if available (Anthropic has api_key, AnthropicBedrock doesn't)
     api_key = getattr(claude, "api_key", None)
