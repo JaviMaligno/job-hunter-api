@@ -301,7 +301,7 @@ async def adapt_cv_for_job(
     api_key = getattr(claude, "api_key", None)
 
     try:
-        # Adapt CV
+        # Adapt CV (language auto-detected if not specified)
         logger.info("Creating CV adapter agent")
         cv_agent = CVAdapterAgent(claude_api_key=api_key)
         cv_input = CVAdapterInput(
@@ -309,13 +309,13 @@ async def adapt_cv_for_job(
             job_description=job_description,
             job_title=request.job_title,
             company=request.company,
-            language=request.language,
+            language=request.language,  # None for auto-detect, or user override
         )
         logger.info("Running CV adapter agent")
         cv_result = await cv_agent.run(cv_input)
-        logger.info(f"CV adaptation complete, match_score: {cv_result.match_score}")
+        logger.info(f"CV adaptation complete, match_score: {cv_result.match_score}, detected_language: {cv_result.detected_language}")
 
-        # Generate cover letter
+        # Generate cover letter using detected language
         logger.info("Creating cover letter agent")
         cover_agent = CoverLetterAgent(claude_api_key=api_key)
         cover_input = CoverLetterInput(
@@ -323,13 +323,14 @@ async def adapt_cv_for_job(
             job_description=job_description,
             job_title=request.job_title,
             company=request.company,
-            language=request.language,
+            language=cv_result.detected_language,  # Use detected language from CV adapter
         )
         logger.info("Running cover letter agent")
         cover_result = await cover_agent.run(cover_input)
         logger.info("Cover letter generation complete")
 
         return CVAdaptResponse(
+            detected_language=cv_result.detected_language,
             adapted_cv=cv_result.adapted_cv,
             cover_letter=cover_result.cover_letter,
             match_score=cv_result.match_score,
@@ -341,3 +342,87 @@ async def adapt_cv_for_job(
     except Exception as e:
         logger.exception(f"Error in CV adaptation: {e}")
         raise HTTPException(status_code=500, detail=f"CV adaptation failed: {str(e)}")
+
+
+# ============================================================================
+# Document Generation Endpoint
+# ============================================================================
+
+
+class DocumentGenerateRequest(BaseModel):
+    """Request to generate a downloadable document."""
+
+    content: str
+    format: str  # "docx" or "pdf"
+    doc_type: str  # "cv" or "cover_letter"
+    job_title: str | None = None
+    company: str | None = None
+    candidate_name: str | None = None
+
+
+@router.post("/documents/generate")
+async def generate_document(request: DocumentGenerateRequest):
+    """
+    Generate a downloadable document (DOCX or PDF) from content.
+
+    This endpoint:
+    1. Takes adapted CV or cover letter content
+    2. Generates a formatted document in the requested format
+    3. Returns the document as a downloadable file
+    """
+    from fastapi.responses import Response
+
+    from src.services.document_generator import (
+        DocumentFormat,
+        DocumentGenerator,
+        DocumentMetadata,
+        DocumentType,
+    )
+
+    # Validate format
+    try:
+        doc_format = DocumentFormat(request.format)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid format: {request.format}. Must be 'docx' or 'pdf'",
+        )
+
+    # Validate document type
+    try:
+        doc_type = DocumentType(request.doc_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid doc_type: {request.doc_type}. Must be 'cv' or 'cover_letter'",
+        )
+
+    # Create metadata
+    metadata = DocumentMetadata(
+        job_title=request.job_title,
+        company=request.company,
+        candidate_name=request.candidate_name,
+    )
+
+    # Generate document
+    generator = DocumentGenerator()
+    doc_bytes = generator.generate(request.content, doc_format, doc_type, metadata)
+
+    # Set content type and filename
+    if doc_format == DocumentFormat.DOCX:
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ext = "docx"
+    else:
+        content_type = "application/pdf"
+        ext = "pdf"
+
+    # Create filename
+    type_name = "CV" if doc_type == DocumentType.CV else "CoverLetter"
+    company_slug = request.company.replace(" ", "_") if request.company else "document"
+    filename = f"{type_name}_{company_slug}.{ext}"
+
+    return Response(
+        content=doc_bytes,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

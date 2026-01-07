@@ -12,12 +12,13 @@ class CVAdapterInput(BaseModel):
     job_description: str = Field(description="Full job description text")
     job_title: str = Field(description="Job title")
     company: str = Field(description="Company name")
-    language: str = Field(default="en", description="Output language: 'en' or 'es'")
+    language: str | None = Field(default=None, description="Output language override: 'en' or 'es'. If None, auto-detect from job description.")
 
 
 class CVAdapterOutput(BaseModel):
     """Output from CV adaptation."""
 
+    detected_language: str = Field(description="Detected language of job description: 'en' or 'es'")
     adapted_cv: str = Field(description="Adapted CV content optimized for the job")
     match_score: int = Field(ge=0, le=100, description="Match score 0-100")
     changes_made: list[str] = Field(description="List of changes made to the CV")
@@ -73,6 +74,16 @@ class CVAdapterAgent(BaseAgent[CVAdapterOutput]):
         Returns:
             Adapted CV with analysis.
         """
+        # Build language instruction
+        if input_data.language:
+            language_instruction = f"""Output language: {input_data.language.upper()} (user specified)
+Set detected_language to "{input_data.language}" in your response."""
+        else:
+            language_instruction = """IMPORTANT: First, detect the language of the job description.
+- If the job description is in Spanish, set detected_language to "es" and generate ALL output in Spanish.
+- If the job description is in English (or any other language), set detected_language to "en" and generate ALL output in English.
+The adapted CV, changes_made, skills_matched, skills_missing, and key_highlights should ALL be in the detected language."""
+
         prompt = f"""Please adapt the following CV for this job opportunity.
 
 ## Job Details
@@ -90,20 +101,21 @@ class CVAdapterAgent(BaseAgent[CVAdapterOutput]):
 ---
 
 ## Task:
-1. Analyze the job requirements
-2. Identify matching skills and experience in the CV
-3. Identify missing skills or gaps
-4. Create an adapted version of the CV that:
+1. **Detect the language** of the job description first
+2. Analyze the job requirements
+3. Identify matching skills and experience in the CV
+4. Identify missing skills or gaps
+5. Create an adapted version of the CV that:
    - Reorders sections to highlight relevant experience
    - Emphasizes matching skills and achievements
    - Uses keywords from the job description
    - Maintains all factual information (no inventions)
-5. Calculate a match score (0-100)
-6. List key points for interview preparation
+6. Calculate a match score (0-100)
+7. List key points for interview preparation
 
-Output language: {input_data.language.upper()}
+{language_instruction}
 
-Return your analysis as a JSON object."""
+Return your analysis as a JSON object with detected_language as the first field."""
 
         return await self._call_claude_json(
             prompt=prompt,
@@ -118,7 +130,7 @@ class CoverLetterInput(BaseModel):
     job_description: str = Field(description="Full job description")
     job_title: str = Field(description="Job title")
     company: str = Field(description="Company name")
-    language: str = Field(default="en", description="Output language: 'en' or 'es'")
+    language: str = Field(default="en", description="Output language: 'en' or 'es' (should use detected_language from CV adapter)")
     tone: str = Field(
         default="professional", description="Tone: professional, enthusiastic, casual"
     )

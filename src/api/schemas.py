@@ -191,12 +191,13 @@ class CVAdaptRequest(BaseModel):
     job_title: str
     company: str
     cv_content: str | None = None  # Uses user's base CV if not provided
-    language: str = Field(default="en", pattern="^(en|es)$")
+    language: str | None = Field(default=None, description="Language override: 'en' or 'es'. If None, auto-detect from job description.")
 
 
 class CVAdaptResponse(BaseModel):
     """Response schema for CV adaptation."""
 
+    detected_language: str = Field(description="Detected language of job description: 'en' or 'es'")
     adapted_cv: str
     cover_letter: str
     match_score: int
