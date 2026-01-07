@@ -53,8 +53,10 @@ async def get_webhook_user(
             if user:
                 return user
 
-            # Find any existing user to use (for existing installations)
-            result = await db.execute(select(User).limit(1))
+            # Find the most recently created user (likely the active user)
+            result = await db.execute(
+                select(User).order_by(User.created_at.desc()).limit(1)
+            )
             user = result.scalar_one_or_none()
             if user:
                 return user
