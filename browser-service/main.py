@@ -42,6 +42,8 @@ class SessionCreateResponse(BaseModel):
     """Response after creating a session."""
     session_id: str
     status: str = "active"
+    mode: str = "playwright"
+    websocket_url: str = ""  # Not used in standalone mode
     created_at: datetime
 
 
@@ -77,11 +79,42 @@ class ScreenshotResponse(BaseModel):
     error: str | None = None
 
 
+class FormField(BaseModel):
+    """Detected form field from DOM."""
+    selector: str
+    field_id: str | None = None
+    field_name: str | None = None
+    field_type: str  # text, email, tel, select, textarea, file, checkbox, radio, hidden
+    tag_name: str = "input"  # input, select, textarea
+    label: str | None = None
+    placeholder: str | None = None
+    required: bool = False
+    current_value: str | None = None
+    options: list[str] | None = None  # For select elements
+    is_visible: bool = True
+    is_enabled: bool = True
+
+    # Compatibility aliases
+    @property
+    def name(self) -> str | None:
+        return self.field_name
+
+    @property
+    def id(self) -> str | None:
+        return self.field_id
+
+    @property
+    def type(self) -> str:
+        return self.field_type
+
+
 class DOMResponse(BaseModel):
     """Response with DOM information."""
     success: bool
-    html: str | None = None
-    form_fields: list[dict] = Field(default_factory=list)
+    page_url: str = ""
+    page_title: str = ""
+    html_snippet: str | None = None
+    form_fields: list[FormField] = Field(default_factory=list)
     error: str | None = None
 
 
@@ -179,32 +212,58 @@ class BrowserSession:
         except Exception as e:
             return ScreenshotResponse(success=False, error=str(e))
 
-    async def get_dom(self, selector: str | None = None) -> DOMResponse:
-        """Get DOM content."""
+    async def get_dom(self, selector: str | None = None, form_fields_only: bool = False) -> DOMResponse:
+        """Get DOM content and form fields."""
         try:
-            if selector:
-                element = await self.page.query_selector(selector)
-                html = await element.inner_html() if element else None
-            else:
-                html = await self.page.content()
+            page_url = self.page.url
+            page_title = await self.page.title()
+
+            html_snippet = None
+            if not form_fields_only:
+                if selector:
+                    element = await self.page.query_selector(selector)
+                    html_snippet = await element.inner_html() if element else None
+                else:
+                    html_snippet = await self.page.content()
+                if html_snippet:
+                    html_snippet = html_snippet[:100000]
 
             # Extract form fields
-            form_fields = []
+            form_fields: list[FormField] = []
             inputs = await self.page.query_selector_all("input, textarea, select")
             for inp in inputs[:50]:  # Limit to 50 fields
-                field_type = await inp.get_attribute("type") or "text"
-                field_name = await inp.get_attribute("name") or ""
-                field_id = await inp.get_attribute("id") or ""
-                placeholder = await inp.get_attribute("placeholder") or ""
-                form_fields.append({
-                    "type": field_type,
-                    "name": field_name,
-                    "id": field_id,
-                    "placeholder": placeholder,
-                    "selector": f"#{field_id}" if field_id else f"[name='{field_name}']" if field_name else None,
-                })
+                tag_name = await inp.evaluate("el => el.tagName.toLowerCase()")
+                field_type = await inp.get_attribute("type") or ("textarea" if tag_name == "textarea" else "text")
+                field_name = await inp.get_attribute("name") or None
+                field_id = await inp.get_attribute("id") or None
+                placeholder = await inp.get_attribute("placeholder") or None
+                required = await inp.get_attribute("required") is not None
 
-            return DOMResponse(success=True, html=html[:100000] if html else None, form_fields=form_fields)
+                # Build selector
+                if field_id:
+                    field_selector = f"#{field_id}"
+                elif field_name:
+                    field_selector = f"[name='{field_name}']"
+                else:
+                    continue  # Skip fields without id or name
+
+                form_fields.append(FormField(
+                    selector=field_selector,
+                    field_id=field_id,
+                    field_name=field_name,
+                    field_type=field_type,
+                    tag_name=tag_name,
+                    placeholder=placeholder,
+                    required=required,
+                ))
+
+            return DOMResponse(
+                success=True,
+                page_url=page_url,
+                page_title=page_title,
+                html_snippet=html_snippet,
+                form_fields=form_fields,
+            )
         except Exception as e:
             return DOMResponse(success=False, error=str(e))
 
@@ -346,13 +405,17 @@ async def take_screenshot(session_id: str, full_page: bool = False) -> Screensho
 
 
 @app.get("/sessions/{session_id}/dom", response_model=DOMResponse)
-async def get_dom(session_id: str, selector: str | None = None) -> DOMResponse:
+async def get_dom(
+    session_id: str,
+    selector: str | None = None,
+    form_fields_only: bool = False,
+) -> DOMResponse:
     """Get DOM content and form fields."""
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    return await session.get_dom(selector)
+    return await session.get_dom(selector, form_fields_only)
 
 
 @app.get("/sessions/{session_id}/url")
