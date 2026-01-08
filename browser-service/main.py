@@ -56,6 +56,8 @@ class NavigateRequest(BaseModel):
 class NavigateResponse(BaseModel):
     """Response after navigation."""
     success: bool
+    action: str = "navigate"
+    duration_ms: int = 0
     url: str | None = None
     page_title: str | None = None
     error: str | None = None
@@ -177,15 +179,20 @@ class BrowserSession:
 
     async def navigate(self, url: str, wait_until: str = "load") -> NavigateResponse:
         """Navigate to a URL."""
+        import time
+        start = time.time()
         try:
             await self.page.goto(url, wait_until=wait_until)
+            duration_ms = int((time.time() - start) * 1000)
             return NavigateResponse(
                 success=True,
+                duration_ms=duration_ms,
                 url=self.page.url,
                 page_title=await self.page.title(),
             )
         except Exception as e:
-            return NavigateResponse(success=False, error=str(e))
+            duration_ms = int((time.time() - start) * 1000)
+            return NavigateResponse(success=False, duration_ms=duration_ms, error=str(e))
 
     async def fill(self, selector: str, value: str) -> dict:
         """Fill a form field."""
