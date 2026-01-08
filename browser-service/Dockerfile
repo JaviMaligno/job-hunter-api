@@ -1,7 +1,7 @@
 # Browser Service Dockerfile for Render
 # Uses Playwright's official image with Chromium pre-installed
 
-FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
 
 WORKDIR /app
 
