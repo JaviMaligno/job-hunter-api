@@ -1,0 +1,17 @@
+# Leapcell deployment configuration for Browser Service
+# https://docs.leapcell.io/
+
+name: job-hunter-browser-service
+runtime: python3.11
+
+build:
+  command: sh prepare_playwright_env.sh
+
+deploy:
+  command: uvicorn main:app --host 0.0.0.0 --port 8080
+  port: 8080
+
+# Environment variables (set in Leapcell dashboard for secrets)
+env:
+  - name: PYTHONUNBUFFERED
+    value: "1"
