@@ -713,6 +713,10 @@ async def start_application_v2(
                 else BrowserMode.PLAYWRIGHT
             )
 
+            # Use headless=True for Playwright mode (cloud browser service)
+            # Only use headless=False for Chrome DevTools mode (local browser)
+            use_headless = browser_mode != BrowserMode.CHROME_DEVTOOLS
+
             filler_input = FormFillerInput(
                 application_url=request.job_url,
                 user_data=request.user_data,
@@ -720,7 +724,7 @@ async def start_application_v2(
                 cv_file_path=request.cv_file_path,
                 cover_letter=request.cover_letter,
                 mode=request.mode,
-                headless=False,
+                headless=use_headless,
                 browser_mode=browser_mode,
                 devtools_url=request.devtools_url,
             )

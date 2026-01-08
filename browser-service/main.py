@@ -425,6 +425,17 @@ async def get_dom(
     return await session.get_dom(selector, form_fields_only)
 
 
+@app.get("/sessions/{session_id}/content")
+async def get_page_content(session_id: str) -> dict:
+    """Get raw page HTML content."""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    content = await session.page.content()
+    return {"content": content}
+
+
 @app.get("/sessions/{session_id}/url")
 async def get_current_url(session_id: str) -> dict:
     """Get current page URL."""
