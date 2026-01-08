@@ -90,6 +90,8 @@ class EvaluateRequest(BaseModel):
 class EvaluateResponse(BaseModel):
     """Response from JavaScript evaluation."""
     success: bool
+    action: str = "evaluate"
+    duration_ms: int = 0
     result: Any = None
     error: str | None = None
 
@@ -452,16 +454,21 @@ async def get_page_content(session_id: str) -> dict:
 @app.post("/sessions/{session_id}/evaluate", response_model=EvaluateResponse)
 async def evaluate_script(session_id: str, request: EvaluateRequest) -> EvaluateResponse:
     """Execute JavaScript in the page context."""
+    import time
+
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    start = time.time()
     try:
         result = await session.page.evaluate(request.script, request.args)
-        return EvaluateResponse(success=True, result=result)
+        duration_ms = int((time.time() - start) * 1000)
+        return EvaluateResponse(success=True, duration_ms=duration_ms, result=result)
     except Exception as e:
+        duration_ms = int((time.time() - start) * 1000)
         logger.error(f"Evaluate error: {e}")
-        return EvaluateResponse(success=False, error=str(e))
+        return EvaluateResponse(success=False, duration_ms=duration_ms, error=str(e))
 
 
 @app.get("/sessions/{session_id}/url")
