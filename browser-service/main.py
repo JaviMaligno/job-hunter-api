@@ -81,6 +81,19 @@ class ScreenshotResponse(BaseModel):
     error: str | None = None
 
 
+class EvaluateRequest(BaseModel):
+    """Request to evaluate JavaScript."""
+    script: str
+    args: list | None = None
+
+
+class EvaluateResponse(BaseModel):
+    """Response from JavaScript evaluation."""
+    success: bool
+    result: Any = None
+    error: str | None = None
+
+
 class FormField(BaseModel):
     """Detected form field from DOM."""
     selector: str
@@ -434,6 +447,21 @@ async def get_page_content(session_id: str) -> dict:
 
     content = await session.page.content()
     return {"content": content}
+
+
+@app.post("/sessions/{session_id}/evaluate", response_model=EvaluateResponse)
+async def evaluate_script(session_id: str, request: EvaluateRequest) -> EvaluateResponse:
+    """Execute JavaScript in the page context."""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        result = await session.page.evaluate(request.script, request.args)
+        return EvaluateResponse(success=True, result=result)
+    except Exception as e:
+        logger.error(f"Evaluate error: {e}")
+        return EvaluateResponse(success=False, error=str(e))
 
 
 @app.get("/sessions/{session_id}/url")
