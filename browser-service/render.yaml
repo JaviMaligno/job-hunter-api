@@ -1,0 +1,15 @@
+# Browser Service - Render deployment configuration
+# Uses Docker with Playwright for browser automation
+
+services:
+  - type: web
+    name: job-hunter-browser-service
+    runtime: docker
+    dockerfilePath: ./browser-service/Dockerfile
+    dockerContext: ./browser-service
+    region: frankfurt
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
