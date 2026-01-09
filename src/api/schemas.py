@@ -151,6 +151,22 @@ class MaterialResponse(BaseModel):
         from_attributes = True
 
 
+class MaterialListResponse(BaseModel):
+    """Schema for list of materials response."""
+
+    materials: list[MaterialResponse]
+    job_id: UUID
+
+
+class MaterialCreate(BaseModel):
+    """Schema for creating a material."""
+
+    material_type: MaterialType
+    content: str
+    changes_made: list[str] | None = None
+    changes_explanation: str | None = None
+
+
 # ============================================================================
 # Application Schemas
 # ============================================================================
@@ -186,6 +202,7 @@ class ApplicationResponse(BaseModel):
 class CVAdaptRequest(BaseModel):
     """Request schema for CV adaptation."""
 
+    job_id: UUID | None = Field(default=None, description="Job ID to save materials to. If provided, materials will be persisted.")
     job_url: str | None = None
     job_description: str | None = None
     job_title: str

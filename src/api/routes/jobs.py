@@ -21,8 +21,12 @@ from src.api.schemas import (
     JobListResponse,
     JobResponse,
     JobUpdate,
+    MaterialCreate,
+    MaterialListResponse,
+    MaterialResponse,
 )
-from src.db.models import Job, JobStatus
+from src.db.models import Job, JobStatus, MaterialType
+from src.db.repositories.material import MaterialRepository
 
 router = APIRouter()
 
@@ -243,6 +247,7 @@ async def delete_job(job_id: UUID, db: DbDep):
 async def adapt_cv_for_job(
     request: CVAdaptRequest,
     claude: ClaudeDep,
+    db: DbDep,
 ):
     """
     Adapt a CV for a specific job posting.
@@ -251,7 +256,8 @@ async def adapt_cv_for_job(
     1. Takes a job description and CV content
     2. Uses AI to analyze requirements and adapt the CV
     3. Generates a cover letter
-    4. Returns adapted materials with match analysis
+    4. Optionally saves materials to database if job_id provided
+    5. Returns adapted materials with match analysis
 
     Requires X-Anthropic-Api-Key header or configured ANTHROPIC_API_KEY.
     """
@@ -329,6 +335,46 @@ async def adapt_cv_for_job(
         cover_result = await cover_agent.run(cover_input)
         logger.info("Cover letter generation complete")
 
+        # Save materials to database if job_id is provided
+        material_ids: list[UUID] = []
+        saved_job_id = request.job_id
+
+        if request.job_id:
+            logger.info(f"Saving materials to job {request.job_id}")
+            # Verify job exists and get user_id
+            job = await db.get(Job, request.job_id)
+            if not job:
+                logger.warning(f"Job {request.job_id} not found, materials will not be saved")
+            else:
+                repo = MaterialRepository(db)
+
+                # Save adapted CV
+                cv_material = await repo.create_new_version(
+                    job_id=request.job_id,
+                    user_id=job.user_id,
+                    material_type=MaterialType.CV,
+                    content=cv_result.adapted_cv,
+                    changes_made=cv_result.changes_made,
+                    changes_explanation=f"Match score: {cv_result.match_score}%. Skills matched: {', '.join(cv_result.skills_matched)}",
+                )
+                material_ids.append(cv_material.id)
+                logger.info(f"Saved CV material {cv_material.id}")
+
+                # Save cover letter
+                cover_material = await repo.create_new_version(
+                    job_id=request.job_id,
+                    user_id=job.user_id,
+                    material_type=MaterialType.COVER_LETTER,
+                    content=cover_result.cover_letter,
+                    changes_made=cover_result.talking_points,
+                    changes_explanation=f"Generated for {request.company} - {request.job_title}",
+                )
+                material_ids.append(cover_material.id)
+                logger.info(f"Saved cover letter material {cover_material.id}")
+
+                await db.commit()
+                logger.info(f"Committed {len(material_ids)} materials to database")
+
         return CVAdaptResponse(
             detected_language=cv_result.detected_language,
             adapted_cv=cv_result.adapted_cv,
@@ -338,10 +384,104 @@ async def adapt_cv_for_job(
             skills_matched=cv_result.skills_matched,
             skills_missing=cv_result.skills_missing,
             key_highlights=cv_result.key_highlights + cover_result.talking_points,
+            job_id=saved_job_id,
+            material_ids=material_ids if material_ids else None,
         )
     except Exception as e:
         logger.exception(f"Error in CV adaptation: {e}")
         raise HTTPException(status_code=500, detail=f"CV adaptation failed: {str(e)}")
+
+
+# ============================================================================
+# Material Endpoints
+# ============================================================================
+
+
+@router.get("/{job_id}/materials", response_model=MaterialListResponse)
+async def get_job_materials(
+    job_id: UUID,
+    db: DbDep,
+    material_type: MaterialType | None = None,
+):
+    """Get all materials for a job.
+
+    Returns all current versions of materials (CV, cover letter, etc.)
+    generated for this job.
+    """
+    # Verify job exists
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    repo = MaterialRepository(db)
+    materials = await repo.get_by_job(job_id, material_type=material_type)
+
+    return MaterialListResponse(
+        materials=[MaterialResponse.model_validate(m) for m in materials],
+        job_id=job_id,
+    )
+
+
+@router.post("/{job_id}/materials", response_model=MaterialResponse)
+async def create_job_material(
+    job_id: UUID,
+    request: MaterialCreate,
+    db: DbDep,
+):
+    """Create or update a material for a job.
+
+    Creates a new version of the material. If a previous version exists,
+    it will be marked as non-current.
+    """
+    # Verify job exists and get user_id
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    repo = MaterialRepository(db)
+    material = await repo.create_new_version(
+        job_id=job_id,
+        user_id=job.user_id,
+        material_type=request.material_type,
+        content=request.content,
+        changes_made=request.changes_made,
+        changes_explanation=request.changes_explanation,
+    )
+
+    await db.commit()
+    return MaterialResponse.model_validate(material)
+
+
+@router.get("/{job_id}/materials/{material_type}", response_model=MaterialResponse)
+async def get_job_material_by_type(
+    job_id: UUID,
+    material_type: MaterialType,
+    db: DbDep,
+):
+    """Get the current version of a specific material type for a job."""
+    repo = MaterialRepository(db)
+    material = await repo.get_current_version(job_id, material_type)
+
+    if not material:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No {material_type.value} found for this job",
+        )
+
+    return MaterialResponse.model_validate(material)
+
+
+@router.get("/{job_id}/materials/{material_type}/versions", response_model=list[MaterialResponse])
+async def get_material_versions(
+    job_id: UUID,
+    material_type: MaterialType,
+    db: DbDep,
+):
+    """Get all versions of a specific material type for a job."""
+    repo = MaterialRepository(db)
+    materials = await repo.get_all_versions(job_id, material_type)
+
+    return [MaterialResponse.model_validate(m) for m in materials]
 
 
 # ============================================================================
