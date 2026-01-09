@@ -232,6 +232,9 @@ class Job(Base):
     location = Column(String(255))
     job_type = Column(String(50))  # remote, hybrid, onsite
     salary_range = Column(String(100))
+    remote_type = Column(String(50))  # remote, hybrid, onsite (more explicit than job_type)
+    employment_type = Column(String(50))  # full-time, part-time, contract, internship
+    easy_apply = Column(Boolean, default=False)  # LinkedIn Easy Apply detection
 
     # Full job description
     description_raw = Column(Text)

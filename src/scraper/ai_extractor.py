@@ -27,6 +27,9 @@ class AIExtractedJob:
     salary_range: str | None = None
     job_type: str | None = None
     requirements: list[str] | None = None
+    remote_type: str | None = None  # "remote", "hybrid", "onsite"
+    easy_apply: bool | None = None  # True if LinkedIn Easy Apply or similar
+    employment_type: str | None = None  # "full-time", "part-time", "contract", "internship"
     model_used: str | None = None
 
 
@@ -80,6 +83,23 @@ EXTRACT_JOB_FUNCTION = types.FunctionDeclaration(
                 description="List of key requirements, skills, and qualifications",
                 nullable=True,
             ),
+            "remote_type": types.Schema(
+                type=types.Type.STRING,
+                enum=["remote", "hybrid", "onsite"],
+                description="Work arrangement type",
+                nullable=True,
+            ),
+            "easy_apply": types.Schema(
+                type=types.Type.BOOLEAN,
+                description="True if LinkedIn Easy Apply or similar quick apply is available",
+                nullable=True,
+            ),
+            "employment_type": types.Schema(
+                type=types.Type.STRING,
+                enum=["full-time", "part-time", "contract", "internship"],
+                description="Type of employment",
+                nullable=True,
+            ),
         },
         required=["title"],
     ),
@@ -93,6 +113,9 @@ Important guidelines:
 - Extract the actual job title, not the page title
 - For description, provide a concise summary of the role and responsibilities
 - For requirements, extract specific skills, experience, and qualifications mentioned
+- For remote_type, determine if the job is "remote", "hybrid", or "onsite" based on the content
+- For easy_apply, set to true if LinkedIn Easy Apply, quick apply, or similar one-click application is available
+- For employment_type, determine if it's "full-time", "part-time", "contract", or "internship"
 - If a field is not clearly stated, pass null
 
 Content to analyze:
@@ -204,6 +227,9 @@ class GeminiExtractor:
                             salary_range=args.get("salary_range"),
                             job_type=args.get("job_type"),
                             requirements=args.get("requirements"),
+                            remote_type=args.get("remote_type"),
+                            easy_apply=args.get("easy_apply"),
+                            employment_type=args.get("employment_type"),
                         )
 
             return None
@@ -265,6 +291,9 @@ class GeminiExtractor:
             salary_range=data.get("salary_range"),
             job_type=data.get("job_type"),
             requirements=data.get("requirements"),
+            remote_type=data.get("remote_type"),
+            easy_apply=data.get("easy_apply"),
+            employment_type=data.get("employment_type"),
         )
 
 

@@ -485,6 +485,107 @@ async def get_material_versions(
 
 
 # ============================================================================
+# Skill Enhancement Endpoint
+# ============================================================================
+
+
+class EnhanceMaterialRequest(BaseModel):
+    """Request to enhance a CV with a new skill."""
+
+    skill: str
+    explanation: str
+    material_id: UUID | None = None  # If not provided, use current CV
+
+
+@router.post("/{job_id}/materials/enhance", response_model=MaterialResponse)
+async def enhance_material_with_skill(
+    job_id: UUID,
+    request: EnhanceMaterialRequest,
+    db: DbDep,
+    claude: ClaudeDep,
+):
+    """
+    Enhance a CV material by adding a new skill.
+
+    This endpoint:
+    1. Gets the current CV material for the job (or specified material)
+    2. Uses SkillEnhancerAgent to enhance the CV with the new skill
+    3. Saves the result as a new material version
+    4. Returns the new material
+
+    Requires X-Anthropic-Api-Key header or configured ANTHROPIC_API_KEY.
+    """
+    import logging
+
+    from src.agents.skill_enhancer import SkillEnhancerAgent, SkillEnhancerInput
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"Enhance material endpoint called for job {job_id}")
+
+    # Verify job exists and get user_id
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    repo = MaterialRepository(db)
+
+    # Get the material to enhance
+    if request.material_id:
+        # Get specific material by ID
+        material = await repo.get(request.material_id)
+        if not material:
+            raise HTTPException(status_code=404, detail="Material not found")
+        if material.job_id != job_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Material does not belong to this job",
+            )
+    else:
+        # Get current CV for the job
+        material = await repo.get_current_version(job_id, MaterialType.CV)
+        if not material:
+            raise HTTPException(
+                status_code=404,
+                detail="No CV found for this job. Please create an adapted CV first.",
+            )
+
+    # Get API key if available (Anthropic has api_key, AnthropicBedrock doesn't)
+    api_key = getattr(claude, "api_key", None)
+
+    try:
+        # Enhance the CV with the new skill
+        logger.info(f"Creating skill enhancer agent for skill: {request.skill}")
+        enhancer_agent = SkillEnhancerAgent(claude_api_key=api_key)
+        enhancer_input = SkillEnhancerInput(
+            cv_content=material.content,
+            skill=request.skill,
+            explanation=request.explanation,
+        )
+        logger.info("Running skill enhancer agent")
+        result = await enhancer_agent.run(enhancer_input)
+        logger.info("Skill enhancement complete")
+
+        # Save the enhanced CV as a new version
+        new_material = await repo.create_new_version(
+            job_id=job_id,
+            user_id=job.user_id,
+            material_type=MaterialType.CV,
+            content=result.enhanced_cv,
+            changes_made=result.changes_made,
+            changes_explanation=f"Added skill: {request.skill}",
+        )
+
+        await db.commit()
+        logger.info(f"Saved enhanced CV material {new_material.id}")
+
+        return MaterialResponse.model_validate(new_material)
+
+    except Exception as e:
+        logger.exception(f"Error in skill enhancement: {e}")
+        raise HTTPException(status_code=500, detail=f"Skill enhancement failed: {str(e)}")
+
+
+# ============================================================================
 # Document Generation Endpoint
 # ============================================================================
 

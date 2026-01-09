@@ -1,10 +1,19 @@
-"""Job URL scraper for extracting job details from various platforms."""
+"""Job URL scraper for extracting job details from various platforms.
 
+Uses Gemini AI extraction as the primary method for reliable results,
+with regex-based fallback for when AI extraction is unavailable.
+"""
+
+import logging
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
 import httpx
+
+from src.scraper.ai_extractor import AIExtractedJob, GeminiExtractor
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -373,9 +382,62 @@ def _extract_generic_job(html: str) -> ScrapedJob:
     return job
 
 
+def _map_ai_extracted_to_scraped_job(
+    ai_job: AIExtractedJob, platform: str
+) -> ScrapedJob:
+    """Map AIExtractedJob fields to ScrapedJob dataclass."""
+    # Determine job_type from either job_type or employment_type
+    job_type = ai_job.job_type or ai_job.employment_type
+
+    return ScrapedJob(
+        title=ai_job.title,
+        company=ai_job.company,
+        location=ai_job.location,
+        description=ai_job.description,
+        job_type=job_type,
+        salary=ai_job.salary_range,
+        platform=platform,
+        success=True,
+        error=None,
+    )
+
+
+async def _extract_with_regex_fallback(html: str, platform: str) -> ScrapedJob:
+    """Fallback extraction using regex patterns when AI extraction fails."""
+    if platform == "linkedin":
+        job = _extract_linkedin_job(html)
+    elif platform == "indeed":
+        job = _extract_indeed_job(html)
+    elif platform == "greenhouse":
+        job = _extract_greenhouse_job(html)
+    elif platform == "lever":
+        job = _extract_lever_job(html)
+    elif platform == "infojobs":
+        job = _extract_infojobs_job(html)
+    elif platform == "computrabajo":
+        job = _extract_computrabajo_job(html)
+    else:
+        job = _extract_generic_job(html)
+
+    job.platform = platform
+
+    # Clean up any HTML entities in extracted text
+    if job.title:
+        job.title = re.sub(r"&[a-zA-Z]+;", " ", job.title).strip()
+    if job.company:
+        job.company = re.sub(r"&[a-zA-Z]+;", " ", job.company).strip()
+    if job.description:
+        job.description = re.sub(r"&[a-zA-Z]+;", " ", job.description).strip()
+
+    return job
+
+
 async def scrape_job_url(url: str, timeout: float = 30.0) -> ScrapedJob:
     """
-    Scrape job details from a URL.
+    Scrape job details from a URL using AI extraction with regex fallback.
+
+    Uses Gemini AI extraction as the primary method for reliable results.
+    Falls back to regex-based extraction if AI extraction fails.
 
     Args:
         url: The job posting URL
@@ -403,32 +465,20 @@ async def scrape_job_url(url: str, timeout: float = 30.0) -> ScrapedJob:
             response.raise_for_status()
             html = response.text
 
-        # Extract based on platform
-        if platform == "linkedin":
-            job = _extract_linkedin_job(html)
-        elif platform == "indeed":
-            job = _extract_indeed_job(html)
-        elif platform == "greenhouse":
-            job = _extract_greenhouse_job(html)
-        elif platform == "lever":
-            job = _extract_lever_job(html)
-        elif platform == "infojobs":
-            job = _extract_infojobs_job(html)
-        elif platform == "computrabajo":
-            job = _extract_computrabajo_job(html)
-        else:
-            job = _extract_generic_job(html)
+        # Primary: Try AI extraction with Gemini
+        try:
+            logger.info(f"Attempting AI extraction for {url}")
+            extractor = GeminiExtractor()
+            ai_job = await extractor.extract(html, url)
+            job = _map_ai_extracted_to_scraped_job(ai_job, platform)
+            logger.info(f"AI extraction successful for {url}")
+            return job
+        except Exception as ai_error:
+            logger.warning(f"AI extraction failed for {url}: {ai_error}")
+            logger.info("Falling back to regex-based extraction")
 
-        job.platform = platform
-
-        # Clean up any HTML entities in extracted text
-        if job.title:
-            job.title = re.sub(r"&[a-zA-Z]+;", " ", job.title).strip()
-        if job.company:
-            job.company = re.sub(r"&[a-zA-Z]+;", " ", job.company).strip()
-        if job.description:
-            job.description = re.sub(r"&[a-zA-Z]+;", " ", job.description).strip()
-
+        # Fallback: Use regex-based extraction
+        job = await _extract_with_regex_fallback(html, platform)
         return job
 
     except httpx.TimeoutException:
