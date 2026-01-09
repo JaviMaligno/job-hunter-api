@@ -95,6 +95,77 @@ async def list_jobs(
     )
 
 
+@router.get("/search", response_model=JobListResponse)
+async def search_jobs(
+    db: DbDep,
+    user_id: Annotated[UUID, Query(description="User ID to filter jobs")],
+    q: Annotated[str | None, Query(description="Search query for title, company, location")] = None,
+    status: Annotated[str | None, Query(description="Filter by status")] = None,
+    company: Annotated[str | None, Query(description="Filter by company")] = None,
+    location: Annotated[str | None, Query(description="Filter by location")] = None,
+    min_match_score: Annotated[int | None, Query(description="Minimum match score")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+):
+    """Search jobs with text query and filters."""
+    from sqlalchemy import or_
+
+    # Build query
+    query = select(Job).where(Job.user_id == user_id)
+
+    # Apply text search
+    if q:
+        search_term = f"%{q}%"
+        query = query.where(
+            or_(
+                Job.title.ilike(search_term),
+                Job.company.ilike(search_term),
+                Job.location.ilike(search_term),
+                Job.description_raw.ilike(search_term),
+            )
+        )
+
+    # Apply status filter
+    if status:
+        try:
+            status_enum = JobStatus(status)
+            query = query.where(Job.status == status_enum)
+        except ValueError:
+            pass  # Invalid status, ignore filter
+
+    # Apply company filter
+    if company:
+        query = query.where(Job.company.ilike(f"%{company}%"))
+
+    # Apply location filter
+    if location:
+        query = query.where(Job.location.ilike(f"%{location}%"))
+
+    # Apply match score filter
+    if min_match_score is not None:
+        query = query.where(Job.match_score >= min_match_score)
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.order_by(Job.created_at.desc()).offset(offset).limit(page_size)
+
+    # Execute query
+    result = await db.execute(query)
+    jobs = result.scalars().all()
+
+    return JobListResponse(
+        jobs=[JobResponse.model_validate(job) for job in jobs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(job_id: UUID, db: DbDep):
     """Get a specific job by ID."""
