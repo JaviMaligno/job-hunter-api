@@ -823,6 +823,8 @@ async def start_application_v2(
         if result.blocker:
             persistent_session.blocker_type = session.blocker_type
             persistent_session.blocker_message = session.blocker_message
+        if result.error_message:
+            persistent_session.error = result.error_message
         if session.status == ApplicationStatus.PAUSED:
             persistent_session.paused_at = datetime.utcnow()
         elif session.status in [ApplicationStatus.SUBMITTED, ApplicationStatus.FAILED]:
