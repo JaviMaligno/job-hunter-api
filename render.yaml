@@ -52,5 +52,7 @@ services:
       # Browser service for automation
       - key: BROWSER_SERVICE_URL
         value: https://job-hunter-browser-service.onrender.com
+      - key: DEFAULT_BROWSER_MODE
+        value: playwright
     healthCheckPath: /health
     autoDeploy: true

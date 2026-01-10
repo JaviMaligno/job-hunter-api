@@ -659,6 +659,20 @@ async def start_application_v2(
         agent_used = request.agent.value
 
         # Run the selected agent
+        # Note: GeminiOrchestratorAgent requires Chrome DevTools MCP (local Chrome).
+        # In playwright mode (production/cloud), force Claude agent since browser service
+        # doesn't support Chrome DevTools MCP.
+        effective_browser_mode = request.browser_mode or settings.default_browser_mode
+        force_claude = effective_browser_mode == "playwright"
+
+        if force_claude and request.agent in [AgentType.GEMINI, AgentType.HYBRID]:
+            logger.info(
+                f"Forcing Claude agent: browser_mode={effective_browser_mode}, "
+                "GeminiOrchestratorAgent requires Chrome DevTools MCP (not available in cloud)"
+            )
+            request.agent = AgentType.CLAUDE
+            agent_used = "claude"
+
         if request.agent in [AgentType.GEMINI, AgentType.HYBRID]:
             # Gemini orchestrator
             gemini_user_data = GeminiUserFormData(
