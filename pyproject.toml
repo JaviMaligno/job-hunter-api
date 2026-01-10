@@ -44,6 +44,7 @@ twocaptcha-python = "^0.0.4"
 python-jose = {extras = ["cryptography"], version = "^3.5.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 email-validator = "^2.3.0"
+html2text = "^2025.4.15"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
