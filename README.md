@@ -7,8 +7,10 @@ AI-powered job hunting automation system that converts email job alerts into a p
 - **Email Integration**: Parse job alerts from Gmail/Outlook
 - **CV Adaptation**: AI-powered CV customization per job posting
 - **Cover Letter Generation**: Contextual cover letters with talking points
-- **Browser Automation**: Form filling via MCP (Chrome DevTools / Playwright)
+- **Browser Automation**: Multiple modes including Local Browser via Chrome Extension
 - **Application Tracking**: Pipeline management (Inbox → Applied)
+- **Real-time Updates**: WebSocket connections for live application progress
+- **Chrome Extension Support**: WebSocket endpoint for local browser automation
 
 ## Quick Start
 
@@ -82,6 +84,20 @@ curl -X POST http://localhost:8000/api/jobs/adapt \
   -H "Content-Type: application/json" \
   -d '{"job_url": "https://...", "cv_content": "..."}'
 ```
+
+### Chrome Extension WebSocket
+
+The API provides a WebSocket endpoint for the Chrome Extension to enable Local Browser mode:
+
+```
+wss://job-hunter-api-kdyd.onrender.com/api/ws/extension
+```
+
+**Connection flow:**
+1. Extension connects to WebSocket endpoint
+2. Dashboard initiates application with `mode: LOCAL_BROWSER`
+3. API sends commands to extension: `navigate`, `analyze`, `fill`
+4. Extension executes in user's browser and reports results
 
 ## Project Structure
 
