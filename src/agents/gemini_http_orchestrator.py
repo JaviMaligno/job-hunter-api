@@ -364,14 +364,18 @@ Always be thorough but cautious - don't submit until all required fields are fil
         fields_filled = []
 
         try:
+            logger.info(f"Creating BrowserServiceClient with base_url={self.browser_service_url}")
             async with BrowserServiceClient(base_url=self.browser_service_url) as browser:
                 self._browser = browser
+                logger.info(f"BrowserServiceClient initialized, actual base_url={browser.base_url}")
 
                 # Create browser session
+                logger.info(f"Creating browser session (headless={input_data.headless})...")
                 await browser.create_session(
                     mode=BrowserMode.PLAYWRIGHT,
                     headless=input_data.headless,
                 )
+                logger.info(f"Browser session created successfully: {browser.session_id}")
                 steps_completed.append("browser_connected")
 
                 # Step 1: Navigate to job URL
