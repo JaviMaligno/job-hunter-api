@@ -599,6 +599,34 @@ class ResumeSessionRequest(BaseModel):
     auto_solve_captcha: bool = True
 
 
+@router.get("/v2/diagnostics")
+async def get_v2_diagnostics():
+    """Check configuration and health of V2 application dependencies."""
+    import httpx
+
+    browser_service_status = "unknown"
+    browser_service_error = None
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{settings.browser_service_url}/health")
+            if response.status_code == 200:
+                browser_service_status = "healthy"
+            else:
+                browser_service_status = f"unhealthy ({response.status_code})"
+    except Exception as e:
+        browser_service_status = "unreachable"
+        browser_service_error = str(e)
+
+    return {
+        "browser_service_url": settings.browser_service_url,
+        "browser_service_status": browser_service_status,
+        "browser_service_error": browser_service_error,
+        "default_browser_mode": settings.default_browser_mode,
+        "gemini_available": GEMINI_AVAILABLE,
+    }
+
+
 @router.post("/v2/start", response_model=ApplicationV2Response)
 async def start_application_v2(
     request: StartApplicationV2Request,
