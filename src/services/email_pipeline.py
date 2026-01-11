@@ -172,7 +172,8 @@ class PipelineResult:
 
     # Extraction results
     jobs_extracted: list[dict[str, Any]] | None = None
-    job_id: UUID | None = None
+    jobs_saved_count: int = 0  # Total jobs saved from email
+    job_id: UUID | None = None  # Primary job ID (used for CV adaptation)
     job_title: str | None = None
     job_company: str | None = None
     job_url: str | None = None
@@ -202,6 +203,7 @@ class PipelineResult:
             "email_received_at": self.email_received_at,
             "message_id": self.message_id,
             "jobs_extracted": self.jobs_extracted,
+            "jobs_saved_count": self.jobs_saved_count,
             "job_id": str(self.job_id) if self.job_id else None,
             "job_title": self.job_title,
             "job_company": self.job_company,
@@ -310,47 +312,60 @@ class EmailPipelineService:
             result.errors = [f"Job extraction failed: {str(e)}"]
             return result
 
-        # Use the first job with a URL (or first job if none have URLs)
-        job = next((j for j in extracted_jobs if j.job_url), extracted_jobs[0])
-        result.job_title = job.title
-        result.job_company = job.company
-        result.job_url = job.job_url
+        # Use the first job with a URL for CV adaptation (or first job if none have URLs)
+        primary_job = next((j for j in extracted_jobs if j.job_url), extracted_jobs[0])
+        result.job_title = primary_job.title
+        result.job_company = primary_job.company
+        result.job_url = primary_job.job_url
 
-        # Step 2: Save job to database if requested
-        if options.save_job and job.job_url:
+        # Step 2: Save ALL jobs to database if requested
+        saved_job_ids: list[UUID] = []
+        if options.save_job:
             try:
-                # Check for duplicates
-                existing = await self.db.execute(
-                    select(Job).where(
-                        Job.user_id == user_id,
-                        Job.source_url == job.job_url,
-                    )
-                )
-                existing_job = existing.scalar_one_or_none()
+                for job in extracted_jobs:
+                    if not job.job_url:
+                        continue  # Skip jobs without URLs
 
-                if existing_job:
-                    result.job_id = existing_job.id
-                    errors.append(f"Job already exists: {existing_job.id}")
-                else:
-                    db_job = Job(
-                        user_id=user_id,
-                        source_url=job.job_url,
-                        title=job.title,
-                        company=job.company,
-                        location=job.location,
-                        source_platform=job.source_platform,
-                        source_email_id=email_content.get("message_id"),
-                        status=JobStatus.INBOX,
+                    # Check for duplicates
+                    existing = await self.db.execute(
+                        select(Job).where(
+                            Job.user_id == user_id,
+                            Job.source_url == job.job_url,
+                        )
                     )
-                    self.db.add(db_job)
-                    await self.db.flush()
-                    await self.db.refresh(db_job)
-                    result.job_id = db_job.id
-                    logger.info(f"Saved job to database: {db_job.id}")
+                    existing_job = existing.scalar_one_or_none()
+
+                    if existing_job:
+                        saved_job_ids.append(existing_job.id)
+                        if job == primary_job:
+                            result.job_id = existing_job.id
+                    else:
+                        db_job = Job(
+                            user_id=user_id,
+                            source_url=job.job_url,
+                            title=job.title,
+                            company=job.company,
+                            location=job.location,
+                            source_platform=job.source_platform,
+                            source_email_id=email_content.get("message_id"),
+                            status=JobStatus.INBOX,
+                        )
+                        self.db.add(db_job)
+                        await self.db.flush()
+                        await self.db.refresh(db_job)
+                        saved_job_ids.append(db_job.id)
+                        if job == primary_job:
+                            result.job_id = db_job.id
+
+                result.jobs_saved_count = len(saved_job_ids)
+                logger.info(f"Saved {len(saved_job_ids)} jobs to database from email")
 
             except Exception as e:
-                logger.exception(f"Error saving job to database: {e}")
-                errors.append(f"Failed to save job: {str(e)}")
+                logger.exception(f"Error saving jobs to database: {e}")
+                errors.append(f"Failed to save jobs: {str(e)}")
+
+        # Keep reference to primary job for CV adaptation
+        job = primary_job
 
         # Step 3: Adapt CV if requested
         if options.adapt_cv:

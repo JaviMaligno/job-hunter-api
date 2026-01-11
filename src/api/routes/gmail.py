@@ -112,7 +112,8 @@ class ProcessEmailResponse(BaseModel):
 
     success: bool
     email: ScannedEmail | None = None
-    job_id: UUID | None = None
+    jobs_saved_count: int = 0  # Total jobs saved from this email
+    job_id: UUID | None = None  # Primary job ID (used for CV adaptation)
     job_title: str | None = None
     job_company: str | None = None
     job_url: str | None = None
@@ -734,6 +735,7 @@ async def process_gmail_message(
     return ProcessEmailResponse(
         success=result.success,
         email=email_info,
+        jobs_saved_count=result.jobs_saved_count,
         job_id=result.job_id,
         job_title=result.job_title,
         job_company=result.job_company,
