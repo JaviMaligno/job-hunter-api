@@ -174,10 +174,17 @@ class BrowserlessClient:
             )
         except Exception as e:
             duration_ms = int((time.time() - start) * 1000)
+            # Always include url even on failure
+            current_url = url
+            try:
+                current_url = self.page.url or url
+            except Exception:
+                pass
             return NavigateResponse(
                 success=False,
                 action="navigate",
                 duration_ms=duration_ms,
+                url=current_url,
                 error=str(e),
             )
 
