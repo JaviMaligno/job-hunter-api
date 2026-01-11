@@ -238,6 +238,11 @@ async def import_job_from_url(
         job_type=scraped.job_type if scraped else None,
         description_raw=scraped.description if scraped else None,
         source_platform=scraped.platform if scraped else "unknown",
+        salary_range=scraped.salary_range if scraped else None,
+        remote_type=scraped.remote_type if scraped else None,
+        easy_apply=scraped.easy_apply if scraped else None,
+        employment_type=scraped.employment_type if scraped else None,
+        requirements_extracted=scraped.requirements if scraped else None,
         status=JobStatus.INBOX,
     )
 
@@ -258,8 +263,16 @@ async def import_job_from_url(
             scraped_fields.append("description")
         if scraped.job_type:
             scraped_fields.append("job_type")
-        if scraped.salary:
-            scraped_fields.append("salary")
+        if scraped.salary_range:
+            scraped_fields.append("salary_range")
+        if scraped.remote_type:
+            scraped_fields.append("remote_type")
+        if scraped.easy_apply:
+            scraped_fields.append("easy_apply")
+        if scraped.employment_type:
+            scraped_fields.append("employment_type")
+        if scraped.requirements:
+            scraped_fields.append("requirements")
 
     platform = scraped.platform if scraped else "unknown"
     if scraped and scraped.success and scraped.title:

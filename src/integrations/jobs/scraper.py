@@ -6,29 +6,14 @@ with regex-based fallback for when AI extraction is unavailable.
 
 import logging
 import re
-from dataclasses import dataclass
 from html.parser import HTMLParser
 
 import httpx
 
 from src.scraper.ai_extractor import AIExtractedJob, GeminiExtractor
+from src.scraper.job_scraper import ScrapedJob
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ScrapedJob:
-    """Scraped job information from a URL."""
-
-    title: str | None = None
-    company: str | None = None
-    location: str | None = None
-    description: str | None = None
-    job_type: str | None = None  # Full-time, Part-time, Contract, etc.
-    salary: str | None = None
-    platform: str = "unknown"
-    success: bool = False
-    error: str | None = None
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -395,7 +380,11 @@ def _map_ai_extracted_to_scraped_job(
         location=ai_job.location,
         description=ai_job.description,
         job_type=job_type,
-        salary=ai_job.salary_range,
+        salary_range=ai_job.salary_range,
+        requirements=ai_job.requirements,
+        remote_type=ai_job.remote_type,
+        easy_apply=ai_job.easy_apply,
+        employment_type=ai_job.employment_type,
         platform=platform,
         success=True,
         error=None,

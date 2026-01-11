@@ -18,17 +18,25 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ScrapedJob:
-    """Scraped job data."""
+    """Scraped job data - unified class for all scraping use cases.
 
-    title: str
+    Used by both internal scraper and integration layer.
+    """
+
+    title: str | None = None
     company: str | None = None
     location: str | None = None
     description: str | None = None
     salary_range: str | None = None
     job_type: str | None = None
-    source_platform: str | None = None
+    platform: str = "unknown"  # Job board platform (linkedin, indeed, etc.)
     requirements: list[str] | None = None
+    remote_type: str | None = None  # "remote", "hybrid", "onsite"
+    easy_apply: bool | None = None  # LinkedIn Easy Apply or similar
+    employment_type: str | None = None  # "full-time", "part-time", "contract", "internship"
     extraction_method: str = "traditional"  # "traditional", "playwright", "ai"
+    success: bool = True  # Whether scraping succeeded
+    error: str | None = None  # Error message if scraping failed
 
 
 # Sites known to require JavaScript rendering
@@ -243,7 +251,7 @@ class JobScraper:
             description=description,
             salary_range=salary_range,
             job_type=job_type,
-            source_platform=platform,
+            platform=platform,
             extraction_method="traditional",
         )
 
@@ -269,8 +277,11 @@ class JobScraper:
             description=ai_result.description,
             salary_range=ai_result.salary_range,
             job_type=ai_result.job_type,
-            source_platform=platform,
+            platform=platform,
             requirements=ai_result.requirements,
+            remote_type=ai_result.remote_type,
+            easy_apply=ai_result.easy_apply,
+            employment_type=ai_result.employment_type,
             extraction_method=f"ai-httpx:{ai_result.model_used}",
         )
 
@@ -292,8 +303,11 @@ class JobScraper:
             description=ai_result.description,
             salary_range=ai_result.salary_range,
             job_type=ai_result.job_type,
-            source_platform=platform,
+            platform=platform,
             requirements=ai_result.requirements,
+            remote_type=ai_result.remote_type,
+            easy_apply=ai_result.easy_apply,
+            employment_type=ai_result.employment_type,
             extraction_method=f"ai-playwright:{ai_result.model_used}",
         )
 
