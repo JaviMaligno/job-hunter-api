@@ -573,11 +573,11 @@ Always be thorough but cautious - don't submit until all required fields are fil
         for field in dom_response.form_fields:
             form_fields_info.append({
                 "selector": field.selector,
-                "type": field.type,
-                "name": field.name,
+                "type": field.field_type,
+                "name": field.field_name,
                 "label": field.label,
                 "required": field.required,
-                "value": field.value,
+                "value": field.current_value,
             })
 
         return {
