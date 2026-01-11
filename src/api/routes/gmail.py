@@ -594,6 +594,60 @@ async def scan_emails(
         )
 
 
+@router.get("/search/{user_id}")
+async def search_emails(
+    user_id: UUID,
+    db: DbDep,
+    q: Annotated[str, Query(description="Gmail search query (e.g., 'from:j&j', 'subject:job')")] = "",
+    max_results: Annotated[int, Query(description="Max results")] = 10,
+):
+    """
+    Search Gmail using a query string.
+
+    Useful for finding emails when you don't know the message ID.
+    Examples:
+    - from:careers@jnj.com
+    - subject:job application
+    - from:j&j
+    """
+    from src.integrations.email.gmail import GmailClient
+
+    gmail_client = await GmailClient.for_user(db, user_id)
+    if not gmail_client:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gmail not connected.",
+        )
+
+    try:
+        results = (
+            gmail_client.service.users()
+            .messages()
+            .list(userId="me", q=q, maxResults=max_results)
+            .execute()
+        )
+
+        messages = results.get("messages", [])
+        emails = []
+        for msg in messages:
+            email_data = gmail_client.get_email_content(msg["id"])
+            if email_data:
+                emails.append({
+                    "message_id": email_data["message_id"],
+                    "subject": email_data["subject"],
+                    "sender": email_data["sender"],
+                    "received_at": email_data["received_at"],
+                    "snippet": email_data["snippet"],
+                })
+
+        return {"total": len(emails), "emails": emails}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Search failed: {str(e)}",
+        )
+
+
 @router.post("/process/{message_id}", response_model=ProcessEmailResponse)
 async def process_gmail_message(
     message_id: str,
