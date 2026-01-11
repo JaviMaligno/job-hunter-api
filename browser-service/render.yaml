@@ -16,4 +16,4 @@ services:
       - key: BROWSERLESS_TOKEN
         sync: false  # Set in Render dashboard
       - key: BROWSERLESS_URL
-        value: "wss://production-sfo.browserless.io"
+        value: "wss://production-ams.browserless.io"

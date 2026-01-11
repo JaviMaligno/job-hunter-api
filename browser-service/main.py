@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Browserless.io configuration
 BROWSERLESS_TOKEN = os.getenv("BROWSERLESS_TOKEN")
-BROWSERLESS_URL = os.getenv("BROWSERLESS_URL", "wss://production-sfo.browserless.io")
+BROWSERLESS_URL = os.getenv("BROWSERLESS_URL", "wss://production-ams.browserless.io")
 USE_BROWSERLESS = bool(BROWSERLESS_TOKEN)
 
 if USE_BROWSERLESS:
