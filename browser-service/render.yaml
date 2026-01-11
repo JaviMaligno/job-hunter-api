@@ -13,3 +13,7 @@ services:
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: BROWSERLESS_TOKEN
+        sync: false  # Set in Render dashboard
+      - key: BROWSERLESS_URL
+        value: "wss://production-sfo.browserless.io"

@@ -1,12 +1,19 @@
 """
-Browser Service for Job Hunter - Standalone Leapcell Deployment
+Browser Service for Job Hunter - Standalone Deployment
 
 A lightweight browser automation service using Playwright.
 Provides HTTP API for browser control operations.
+
+Supports two modes:
+- Local: Launches Chromium locally (for development)
+- Browserless: Connects to Browserless.io cloud service (for production)
+
+Set BROWSERLESS_TOKEN environment variable to use Browserless.io.
 """
 
 import base64
 import logging
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -21,6 +28,16 @@ from pydantic import BaseModel, Field
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Browserless.io configuration
+BROWSERLESS_TOKEN = os.getenv("BROWSERLESS_TOKEN")
+BROWSERLESS_URL = os.getenv("BROWSERLESS_URL", "wss://production-sfo.browserless.io")
+USE_BROWSERLESS = bool(BROWSERLESS_TOKEN)
+
+if USE_BROWSERLESS:
+    logger.info(f"Browserless.io mode enabled (endpoint: {BROWSERLESS_URL})")
+else:
+    logger.info("Local Playwright mode (set BROWSERLESS_TOKEN to use cloud)")
 
 
 # =============================================================================
@@ -153,15 +170,26 @@ class BrowserSession:
         self._page: Page | None = None
 
     async def initialize(self) -> None:
-        """Initialize the browser."""
+        """Initialize the browser.
+
+        Uses Browserless.io if BROWSERLESS_TOKEN is set, otherwise launches locally.
+        """
         logger.info(f"Initializing session {self.session_id} (headless={self.config.headless})")
 
         self._playwright = await async_playwright().start()
 
-        self._browser = await self._playwright.chromium.launch(
-            headless=self.config.headless,
-            slow_mo=self.config.slow_mo,
-        )
+        if USE_BROWSERLESS:
+            # Connect to Browserless.io cloud service
+            browserless_endpoint = f"{BROWSERLESS_URL}?token={BROWSERLESS_TOKEN}"
+            logger.info(f"Connecting to Browserless.io...")
+            self._browser = await self._playwright.chromium.connect_over_cdp(browserless_endpoint)
+            logger.info("Connected to Browserless.io successfully")
+        else:
+            # Launch local browser
+            self._browser = await self._playwright.chromium.launch(
+                headless=self.config.headless,
+                slow_mo=self.config.slow_mo,
+            )
 
         viewport = {"width": self.config.viewport_width, "height": self.config.viewport_height}
         self._context = await self._browser.new_context(
@@ -171,20 +199,25 @@ class BrowserSession:
         self._context.set_default_timeout(self.config.timeout)
 
         self._page = await self._context.new_page()
-        logger.info(f"Session {self.session_id} initialized")
+        logger.info(f"Session {self.session_id} initialized (browserless={USE_BROWSERLESS})")
 
     async def close(self) -> None:
         """Close the browser session."""
         logger.info(f"Closing session {self.session_id}")
 
-        if self._page:
-            await self._page.close()
-        if self._context:
-            await self._context.close()
-        if self._browser:
-            await self._browser.close()
-        if self._playwright:
-            await self._playwright.stop()
+        try:
+            if self._page:
+                await self._page.close()
+            if self._context:
+                await self._context.close()
+            if self._browser:
+                await self._browser.close()
+            if self._playwright and not USE_BROWSERLESS:
+                # Only stop playwright for local mode
+                # For Browserless, the connection is managed by them
+                await self._playwright.stop()
+        except Exception as e:
+            logger.warning(f"Error closing session {self.session_id}: {e}")
 
     @property
     def page(self) -> Page:
@@ -339,6 +372,8 @@ async def health_check() -> dict:
     return {
         "status": "healthy",
         "service": "browser-service",
+        "mode": "browserless" if USE_BROWSERLESS else "local",
+        "browserless_endpoint": BROWSERLESS_URL if USE_BROWSERLESS else None,
         "active_sessions": len(sessions),
     }
 
