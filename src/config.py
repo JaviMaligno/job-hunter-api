@@ -99,10 +99,14 @@ class Settings(BaseSettings):
     max_applications_per_day: int = Field(default=10, ge=1, le=100)
     max_auto_applications_per_day: int = Field(default=5, ge=1, le=50)
 
-    # Browser Service (Phase 2)
+    # Browser Service (Phase 2) - Legacy, kept for backwards compatibility
     browser_service_url: str = "http://localhost:8001"
     browser_service_timeout: int = Field(default=30000, ge=5000, le=120000)  # ms
     default_browser_mode: str = "chrome-devtools"  # "chrome-devtools" or "playwright"
+
+    # Browserless.io (Cloud browser service - replaces local browser service)
+    browserless_token: str | None = None
+    browserless_url: str = "wss://production-ams.browserless.io"
 
     # Playwright Settings
     playwright_headless: bool = True
