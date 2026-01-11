@@ -1471,6 +1471,34 @@ async def delete_v2_session(session_id: str):
     return {"status": "deleted", "session_id": session_id}
 
 
+@router.post("/v2/sessions/{session_id}/mark-applied")
+async def mark_session_applied(session_id: str, db: DBSession):
+    """Mark a session as applied (update associated job status)."""
+    session_store = get_session_store()
+    session = await session_store.load(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Update session status
+    session.status = ApplicationStatus.SUBMITTED
+    await session_store.save(session)
+
+    # Update job status if we can find the associated job
+    if session.job_url:
+        from src.db.repositories.job import JobRepository
+        from src.db.models import JobStatus
+
+        job_repo = JobRepository(db)
+        # Try to find job by URL
+        jobs = await job_repo.find_by_url(session.job_url)
+        if jobs:
+            job = jobs[0]
+            await job_repo.update_status(job.id, JobStatus.APPLIED)
+
+    return {"status": "marked_applied", "session_id": session_id}
+
+
 # ============================================================================
 # Local Browser (Extension) Endpoints
 # ============================================================================

@@ -154,3 +154,16 @@ class JobRepository(BaseRepository[Job]):
         jobs = list(result.scalars().all())
 
         return jobs, total
+
+    async def find_by_url(self, url: str) -> list[Job]:
+        """Find jobs by URL.
+
+        Args:
+            url: Job URL to search for
+
+        Returns:
+            List of jobs with matching URL
+        """
+        query = select(Job).where(Job.url == url)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
