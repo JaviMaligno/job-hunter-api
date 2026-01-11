@@ -1,11 +1,14 @@
 # Browser Service Dockerfile for Render
-# Uses Playwright's official image with Chromium pre-installed
+# Lightweight image - connects to Browserless.io (no local browser needed)
 
-FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Python dependencies
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies (playwright connects via CDP, no local browser needed)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
