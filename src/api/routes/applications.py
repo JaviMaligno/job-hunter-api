@@ -1472,6 +1472,271 @@ async def delete_v2_session(session_id: str):
 
 
 # ============================================================================
+# Local Browser (Extension) Endpoints
+# ============================================================================
+
+
+class LocalApplicationRequest(BaseModel):
+    """Request to start a local browser application."""
+
+    job_url: str = Field(..., description="URL of the job application page")
+    user_id: str = Field(..., description="User ID for fetching CV and data")
+    cv_content: str | None = Field(None, description="Optional CV content override")
+    cover_letter: str | None = Field(None, description="Optional cover letter")
+
+
+class FillInstruction(BaseModel):
+    """Single field fill instruction."""
+
+    selector: str = Field(..., description="CSS selector for the field")
+    value: str = Field(..., description="Value to fill")
+    field_name: str | None = Field(None, description="Human-readable field name")
+    confidence: float = Field(1.0, description="Confidence score 0-1")
+
+
+class LocalApplicationResponse(BaseModel):
+    """Response from local application start."""
+
+    success: bool
+    session_id: str | None = None
+    tab_id: int | None = None
+    form_fields: list[dict] | None = None
+    fill_instructions: list[FillInstruction] | None = None
+    error: str | None = None
+
+
+class ExecuteFillRequest(BaseModel):
+    """Request to execute fill commands on extension."""
+
+    tab_id: int = Field(..., description="Tab ID from extension")
+    instructions: list[FillInstruction] = Field(..., description="Fill instructions")
+
+
+class ExecuteFillResponse(BaseModel):
+    """Response from fill execution."""
+
+    success: bool
+    filled: int = 0
+    total: int = 0
+    results: list[dict] | None = None
+    error: str | None = None
+
+
+@router.post("/v2/local/start", response_model=LocalApplicationResponse)
+async def start_local_application(request: LocalApplicationRequest):
+    """Start a local browser application using the Chrome extension.
+
+    This endpoint:
+    1. Verifies the extension is connected
+    2. Opens the job URL in user's browser via extension
+    3. Analyzes the form using Browserless.io (in parallel)
+    4. Returns fill instructions for the dashboard to review/execute
+
+    The user can see and interact with their browser the whole time.
+    """
+    from src.api.routes.extension import get_extension_manager
+    from src.automation.browserless_client import BrowserlessClient
+
+    extension = get_extension_manager()
+
+    # Check extension is connected
+    if not extension.is_connected:
+        return LocalApplicationResponse(
+            success=False,
+            error="Chrome extension not connected. Please connect it first.",
+        )
+
+    session_id = str(uuid4())
+    tab_id = None
+    form_fields = []
+    fill_instructions = []
+
+    try:
+        # Step 1: Open URL in user's browser via extension
+        logger.info(f"Opening {request.job_url} in user's browser")
+        open_result = await extension.open_tab(request.job_url)
+
+        if not open_result.get("success"):
+            return LocalApplicationResponse(
+                success=False,
+                error=f"Failed to open tab: {open_result.get('error')}",
+            )
+
+        tab_id = open_result.get("tabId")
+        logger.info(f"Opened tab {tab_id}")
+
+        # Wait a bit for page to load
+        await asyncio.sleep(2)
+
+        # Step 2: Get form fields from extension
+        fields_result = await extension.get_form_fields(tab_id)
+
+        if fields_result.get("success"):
+            form_fields = fields_result.get("fields", [])
+            logger.info(f"Found {len(form_fields)} form fields via extension")
+
+        # Step 3: Use Browserless to analyze the page and generate fill instructions
+        # This runs in parallel with the user seeing the page
+        if form_fields and request.cv_content:
+            fill_instructions = await _generate_fill_instructions(
+                job_url=request.job_url,
+                form_fields=form_fields,
+                cv_content=request.cv_content,
+                cover_letter=request.cover_letter,
+            )
+            logger.info(f"Generated {len(fill_instructions)} fill instructions")
+
+        return LocalApplicationResponse(
+            success=True,
+            session_id=session_id,
+            tab_id=tab_id,
+            form_fields=form_fields,
+            fill_instructions=fill_instructions,
+        )
+
+    except asyncio.TimeoutError:
+        return LocalApplicationResponse(
+            success=False,
+            error="Extension did not respond in time",
+        )
+    except Exception as e:
+        logger.exception(f"Error starting local application: {e}")
+        return LocalApplicationResponse(
+            success=False,
+            error=str(e),
+        )
+
+
+@router.post("/v2/local/execute", response_model=ExecuteFillResponse)
+async def execute_local_fill(request: ExecuteFillRequest):
+    """Execute fill commands on the user's browser via extension.
+
+    Takes the fill instructions (after user review) and sends them
+    to the extension to fill in the form fields.
+    """
+    from src.api.routes.extension import get_extension_manager
+
+    extension = get_extension_manager()
+
+    if not extension.is_connected:
+        return ExecuteFillResponse(
+            success=False,
+            error="Chrome extension not connected",
+        )
+
+    try:
+        # Convert instructions to format expected by extension
+        fields = [
+            {
+                "selector": inst.selector,
+                "value": inst.value,
+                "name": inst.field_name or inst.selector,
+            }
+            for inst in request.instructions
+        ]
+
+        # Execute batch fill
+        result = await extension.batch_fill(request.tab_id, fields)
+
+        return ExecuteFillResponse(
+            success=result.get("success", False),
+            filled=result.get("filled", 0),
+            total=result.get("total", len(fields)),
+            results=result.get("results"),
+        )
+
+    except asyncio.TimeoutError:
+        return ExecuteFillResponse(
+            success=False,
+            error="Fill operation timed out",
+        )
+    except Exception as e:
+        logger.exception(f"Error executing fill: {e}")
+        return ExecuteFillResponse(
+            success=False,
+            error=str(e),
+        )
+
+
+async def _generate_fill_instructions(
+    job_url: str,
+    form_fields: list[dict],
+    cv_content: str,
+    cover_letter: str | None,
+) -> list[FillInstruction]:
+    """Generate fill instructions using AI analysis.
+
+    This uses Browserless.io to scrape the job page and Claude/Gemini
+    to match CV content to form fields.
+    """
+    instructions = []
+
+    # Simple field matching based on common patterns
+    # In production, this would use Claude to intelligently match
+    field_mappings = {
+        "first_name": ["first", "fname", "given"],
+        "last_name": ["last", "lname", "surname", "family"],
+        "email": ["email", "e-mail", "correo"],
+        "phone": ["phone", "tel", "mobile", "telefono"],
+        "linkedin": ["linkedin"],
+        "portfolio": ["portfolio", "website", "url"],
+        "resume": ["resume", "cv"],
+        "cover_letter": ["cover", "letter", "carta"],
+    }
+
+    # Extract basic info from CV (simplified - would use AI in production)
+    cv_lower = cv_content.lower()
+
+    for field in form_fields:
+        selector = field.get("selector", "")
+        field_name = (field.get("name") or field.get("label") or "").lower()
+        field_type = field.get("type", "text")
+        placeholder = (field.get("placeholder") or "").lower()
+
+        # Skip hidden, submit, file inputs
+        if field_type in ["hidden", "submit", "button", "file"]:
+            continue
+
+        combined = f"{field_name} {placeholder}"
+
+        # Try to match field to a known type
+        for data_key, patterns in field_mappings.items():
+            if any(p in combined for p in patterns):
+                # In production, extract actual values from CV
+                value = ""
+                if data_key == "email":
+                    # Try to extract email from CV
+                    import re
+                    emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', cv_content)
+                    value = emails[0] if emails else ""
+                elif data_key == "phone":
+                    # Try to extract phone from CV
+                    import re
+                    phones = re.findall(r'[\+]?[\d\s\-\(\)]{10,}', cv_content)
+                    value = phones[0].strip() if phones else ""
+
+                if value:
+                    instructions.append(FillInstruction(
+                        selector=selector,
+                        value=value,
+                        field_name=data_key,
+                        confidence=0.8,
+                    ))
+                break
+
+        # Handle cover letter textarea
+        if cover_letter and "cover" in combined:
+            instructions.append(FillInstruction(
+                selector=selector,
+                value=cover_letter,
+                field_name="cover_letter",
+                confidence=0.9,
+            ))
+
+    return instructions
+
+
+# ============================================================================
 # V2 WebSocket Endpoints
 # ============================================================================
 

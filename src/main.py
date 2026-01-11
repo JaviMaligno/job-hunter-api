@@ -164,7 +164,7 @@ async def websocket_test(websocket: WebSocket):
 
 
 # Import and include routers
-from src.api.routes import applications, auth, emails, gmail, jobs, linkedin, users
+from src.api.routes import applications, auth, emails, extension, gmail, jobs, linkedin, users
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
@@ -173,3 +173,4 @@ app.include_router(applications.router, prefix="/api/applications", tags=["appli
 app.include_router(gmail.router, prefix="/api/gmail", tags=["gmail"])
 app.include_router(emails.router, prefix="/api/emails", tags=["emails"])
 app.include_router(linkedin.router, prefix="/api/linkedin", tags=["linkedin"])
+app.include_router(extension.router, prefix="/api", tags=["extension"])
