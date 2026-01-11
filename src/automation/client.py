@@ -117,7 +117,14 @@ class BrowserServiceClient:
             devtools_url=devtools_url,
         )
 
+        logger.info(f"Creating session at {self.base_url}/sessions with mode={mode}, headless={headless}")
         response = await self.client.post("/sessions", json=request.model_dump())
+
+        # Log detailed error info before raising
+        if response.status_code >= 400:
+            error_body = response.text
+            logger.error(f"Session creation failed: {response.status_code} - {error_body}")
+
         response.raise_for_status()
 
         result = SessionCreateResponse.model_validate(response.json())
