@@ -26,14 +26,14 @@ from src.browser_service.models import BrowserMode
 from src.config import settings
 from src.db.models import ApplicationMode, ApplicationStatus, BlockerType
 
-# Gemini orchestrator imports (optional)
+# Gemini HTTP orchestrator imports (optional)
 try:
-    from src.agents.gemini_orchestrator import (
-        GeminiOrchestratorAgent,
+    from src.agents.gemini_http_orchestrator import (
+        GeminiHTTPOrchestratorAgent,
         OrchestratorInput,
         OrchestratorOutput,
     )
-    from src.agents.gemini_orchestrator import (
+    from src.agents.gemini_http_orchestrator import (
         UserFormData as GeminiUserFormData,
     )
     from src.automation.intervention_manager import (
@@ -659,20 +659,7 @@ async def start_application_v2(
         agent_used = request.agent.value
 
         # Run the selected agent
-        # Note: GeminiOrchestratorAgent requires Chrome DevTools MCP (local Chrome).
-        # In playwright mode (production/cloud), force Claude agent since browser service
-        # doesn't support Chrome DevTools MCP.
-        effective_browser_mode = request.browser_mode or settings.default_browser_mode
-        force_claude = effective_browser_mode == "playwright"
-
-        if force_claude and request.agent in [AgentType.GEMINI, AgentType.HYBRID]:
-            logger.info(
-                f"Forcing Claude agent: browser_mode={effective_browser_mode}, "
-                "GeminiOrchestratorAgent requires Chrome DevTools MCP (not available in cloud)"
-            )
-            request.agent = AgentType.CLAUDE
-            agent_used = "claude"
-
+        # GeminiHTTPOrchestratorAgent works with both local Chrome and remote browser service
         if request.agent in [AgentType.GEMINI, AgentType.HYBRID]:
             # Gemini orchestrator
             gemini_user_data = GeminiUserFormData(
@@ -704,7 +691,7 @@ async def start_application_v2(
             )
 
             try:
-                agent = GeminiOrchestratorAgent(
+                agent = GeminiHTTPOrchestratorAgent(
                     model=request.gemini_model, auto_solve_captcha=request.auto_solve_captcha
                 )
                 result = await agent.run(orchestrator_input)
@@ -748,7 +735,7 @@ async def start_application_v2(
             claude_result: FormFillerOutput = await claude_agent.run(filler_input)
 
             # Convert Claude result to OrchestratorOutput format for unified handling
-            from src.agents.gemini_orchestrator import (
+            from src.agents.gemini_http_orchestrator import (
                 BlockerDetected,
                 FieldFilled,
                 OrchestratorOutput,
@@ -1209,7 +1196,7 @@ async def resume_v2_session(
                 )
 
                 # Run orchestrator
-                agent = GeminiOrchestratorAgent(auto_solve_captcha=request.auto_solve_captcha)
+                agent = GeminiHTTPOrchestratorAgent(auto_solve_captcha=request.auto_solve_captcha)
                 result = await agent.run(orchestrator_input)
             except Exception as gemini_error:
                 logger.warning(f"Gemini agent failed during resume: {gemini_error}")
@@ -1243,7 +1230,7 @@ async def resume_v2_session(
                 claude_result: FormFillerOutput = await claude_agent.run(filler_input)
 
                 # Convert Claude result to OrchestratorOutput format
-                from src.agents.gemini_orchestrator import BlockerDetected, FieldFilled
+                from src.agents.gemini_http_orchestrator import BlockerDetected, FieldFilled
 
                 blocker = None
                 if claude_result.blocker_detected:
