@@ -136,6 +136,18 @@ def extract_text_from_docx(file_content: bytes) -> str:
     return "\n".join(text_parts)
 
 
+@router.get("/debug/list")
+async def list_users_debug(db: DbDep):
+    """DEBUG: List all users with IDs and emails. Remove in production."""
+    from sqlalchemy import select
+
+    from src.db.models import User
+
+    result = await db.execute(select(User.id, User.email, User.first_name))
+    users = result.all()
+    return [{"id": str(u.id), "email": u.email, "first_name": u.first_name} for u in users]
+
+
 @router.post("/", response_model=UserResponse)
 async def create_user(user: UserCreate, db: DbDep):
     """Create a new user profile."""
