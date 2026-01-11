@@ -477,6 +477,93 @@ async def adapt_cv_for_job(
 
 
 # ============================================================================
+# CV Enhancement Endpoint
+# ============================================================================
+
+
+class CVEnhanceRequest(BaseModel):
+    """Request to enhance CV with a skill."""
+
+    cv_content: str
+    skill_name: str
+    skill_explanation: str
+    job_title: str | None = None
+    company: str | None = None
+
+
+class CVEnhanceResponse(BaseModel):
+    """Response from CV enhancement."""
+
+    enhanced_cv: str
+    skill_added: str
+    changes_made: list[str]
+
+
+@router.post("/enhance", response_model=CVEnhanceResponse)
+async def enhance_cv_with_skill(
+    request: CVEnhanceRequest,
+    claude: ClaudeDep,
+):
+    """
+    Enhance a CV by adding a skill based on user's explanation.
+
+    Uses AI to naturally integrate the skill into the CV based on the
+    user's description of their experience with the skill.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"CV enhance endpoint called for skill: {request.skill_name}")
+
+    # Get API key if available
+    api_key = getattr(claude, "api_key", None)
+
+    # Build prompt for CV enhancement
+    prompt = f"""You are a professional CV writer. Enhance the following CV by adding the skill "{request.skill_name}" based on the user's experience description.
+
+USER'S EXPERIENCE WITH {request.skill_name.upper()}:
+{request.skill_explanation}
+
+CURRENT CV:
+{request.cv_content}
+
+INSTRUCTIONS:
+1. Naturally integrate the skill "{request.skill_name}" into the CV
+2. Add it to the relevant sections (skills section, experience descriptions, etc.)
+3. Use the user's experience description to craft professional bullet points
+4. Maintain the original CV's format and style
+5. Only make changes related to adding this skill - don't modify other content
+
+Return ONLY the complete enhanced CV text, nothing else."""
+
+    try:
+        # Use Claude to enhance the CV
+        response = await claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        enhanced_cv = response.content[0].text.strip()
+
+        logger.info(f"CV enhanced successfully with skill: {request.skill_name}")
+
+        return CVEnhanceResponse(
+            enhanced_cv=enhanced_cv,
+            skill_added=request.skill_name,
+            changes_made=[
+                f"Added '{request.skill_name}' skill to CV",
+                "Updated skills section",
+                "Added relevant experience details",
+            ],
+        )
+
+    except Exception as e:
+        logger.exception(f"Error enhancing CV: {e}")
+        raise HTTPException(status_code=500, detail=f"CV enhancement failed: {str(e)}")
+
+
+# ============================================================================
 # Material Endpoints
 # ============================================================================
 
