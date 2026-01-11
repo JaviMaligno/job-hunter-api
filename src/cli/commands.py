@@ -342,6 +342,150 @@ def gmail_fetch(
 
 
 @app.command()
+def process_email(
+    message_id: Annotated[str, typer.Argument(help="Gmail message ID to process")],
+    user_id: Annotated[str, typer.Option("--user", "-u", help="User UUID")] = None,
+    adapt: Annotated[bool, typer.Option("--adapt", "-a", help="Adapt CV for the job")] = False,
+    cover: Annotated[bool, typer.Option("--cover", "-c", help="Generate cover letter")] = False,
+    apply: Annotated[bool, typer.Option("--apply", help="Start automatic application")] = False,
+    port: Annotated[int, typer.Option("--port", "-p", help="Chrome DevTools port")] = 9222,
+    language: Annotated[str, typer.Option("--lang", "-l", help="Output language (en/es)")] = "en",
+    api_url: Annotated[str, typer.Option("--api-url", help="API base URL")] = "http://localhost:8000",
+):
+    """
+    Process a single Gmail message through the job pipeline.
+
+    This command fetches a specific email by its Gmail message ID and processes it
+    through the job pipeline (extraction, CV adaptation, cover letter, application).
+
+    The message_id can be found in Gmail URLs:
+    https://mail.google.com/mail/u/0/#inbox/{message_id}
+
+    Examples:
+        # Just extract job and save to database
+        job-hunter process-email 18abc123def --user <uuid>
+
+        # Extract, adapt CV and generate cover letter
+        job-hunter process-email 18abc123def -u <uuid> --adapt --cover
+
+        # Full pipeline with automatic application
+        job-hunter process-email 18abc123def -u <uuid> --adapt --cover --apply --port 9222
+    """
+    import httpx
+
+    if not user_id:
+        console.print("[red]Error:[/red] --user/-u is required")
+        raise typer.Exit(1)
+
+    console.print(
+        Panel(
+            f"[bold]Processing Gmail message[/bold]\n\n"
+            f"Message ID: {message_id}\n"
+            f"User: {user_id}\n"
+            f"Adapt CV: {adapt}\n"
+            f"Cover Letter: {cover}\n"
+            f"Auto Apply: {apply}",
+            title="Job Hunter - Process Email",
+        )
+    )
+
+    async def _process():
+        url = f"{api_url}/api/gmail/process/{message_id}"
+        params = {"user_id": user_id}
+        body = {
+            "save_job": True,
+            "adapt_cv": adapt,
+            "generate_cover_letter": cover,
+            "start_application": apply,
+            "language": language,
+            "devtools_url": f"http://localhost:{port}" if apply else None,
+        }
+
+        console.print("[dim]Calling API...[/dim]")
+
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(url, params=params, json=body)
+
+            if response.status_code != 200:
+                console.print(f"[red]API Error ({response.status_code}):[/red]")
+                try:
+                    error_detail = response.json().get("detail", response.text)
+                    console.print(f"  {error_detail}")
+                except Exception:
+                    console.print(f"  {response.text}")
+                raise typer.Exit(1)
+
+            return response.json()
+
+    try:
+        result = asyncio.run(_process())
+
+        # Display results
+        console.print("\n")
+
+        if result.get("success"):
+            console.print("[green]Email processed successfully![/green]\n")
+        else:
+            console.print("[yellow]Email processed with warnings[/yellow]\n")
+
+        # Email info
+        email = result.get("email", {})
+        if email:
+            console.print(f"[bold]Subject:[/bold] {email.get('subject', 'N/A')}")
+            console.print(f"[dim]From:[/dim] {email.get('sender', 'N/A')}")
+            console.print(f"[dim]Date:[/dim] {email.get('received_at', 'N/A')[:10] if email.get('received_at') else 'N/A'}")
+
+        # Job info
+        if result.get("job_id"):
+            console.print(f"\n[bold]Job Saved:[/bold] {result['job_id']}")
+            console.print(f"  Title: {result.get('job_title', 'N/A')}")
+            console.print(f"  Company: {result.get('job_company', 'N/A')}")
+            if result.get("job_url"):
+                console.print(f"  URL: {result['job_url'][:60]}...")
+
+        # Match score
+        if result.get("match_score"):
+            score = result["match_score"]
+            color = "green" if score >= 70 else "yellow" if score >= 50 else "red"
+            console.print(f"\n[bold]Match Score:[/bold] [{color}]{score}/100[/{color}]")
+
+            if result.get("skills_matched"):
+                console.print("\n[bold]Skills Matched:[/bold]")
+                for skill in result["skills_matched"][:5]:
+                    console.print(f"  [green]+[/green] {skill}")
+
+            if result.get("skills_missing"):
+                console.print("\n[bold]Skills Missing:[/bold]")
+                for skill in result["skills_missing"][:5]:
+                    console.print(f"  [yellow]-[/yellow] {skill}")
+
+        # Application status
+        if result.get("application_session_id"):
+            console.print(f"\n[bold]Application:[/bold]")
+            console.print(f"  Session: {result['application_session_id']}")
+            console.print(f"  Status: {result.get('application_status', 'N/A')}")
+
+        # Errors
+        if result.get("errors"):
+            console.print("\n[yellow]Warnings/Errors:[/yellow]")
+            for error in result["errors"]:
+                console.print(f"  [yellow]*[/yellow] {error}")
+
+        # Save outputs if generated
+        if result.get("adapted_cv"):
+            console.print("\n[dim]Adapted CV available in response[/dim]")
+
+        if result.get("cover_letter"):
+            console.print("[dim]Cover letter available in response[/dim]")
+
+    except Exception as e:
+        if not isinstance(e, typer.Exit):
+            console.print(f"\n[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+        raise
+
+
+@app.command()
 def version():
     """Show version information."""
     console.print("[bold]Job Hunter API[/bold] v0.1.0")

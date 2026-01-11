@@ -96,6 +96,36 @@ class EmailScanResponse(BaseModel):
     message: str | None = None
 
 
+class ProcessEmailRequest(BaseModel):
+    """Request for processing a single email through the pipeline."""
+
+    save_job: bool = True
+    adapt_cv: bool = False
+    generate_cover_letter: bool = False
+    start_application: bool = False
+    language: str = "en"
+    devtools_url: str | None = None
+
+
+class ProcessEmailResponse(BaseModel):
+    """Response from processing a single email."""
+
+    success: bool
+    email: ScannedEmail | None = None
+    job_id: UUID | None = None
+    job_title: str | None = None
+    job_company: str | None = None
+    job_url: str | None = None
+    adapted_cv: str | None = None
+    cover_letter: str | None = None
+    match_score: int | None = None
+    skills_matched: list[str] | None = None
+    skills_missing: list[str] | None = None
+    application_session_id: str | None = None
+    application_status: str | None = None
+    errors: list[str] = []
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -562,3 +592,104 @@ async def scan_emails(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error scanning emails: {str(e)}",
         )
+
+
+@router.post("/process/{message_id}", response_model=ProcessEmailResponse)
+async def process_gmail_message(
+    message_id: str,
+    user_id: Annotated[UUID, Query(description="User ID")],
+    db: DbDep,
+    request: ProcessEmailRequest | None = None,
+) -> ProcessEmailResponse:
+    """
+    Process a single Gmail message through the job pipeline.
+
+    This endpoint processes a specific email by its Gmail message ID and runs
+    through the optional pipeline steps:
+
+    1. **Extract job**: Parse email to find job posting information
+    2. **Save job**: Store extracted job in database (default: true)
+    3. **Adapt CV**: Customize user's CV for the job (requires adapt_cv=true)
+    4. **Generate cover letter**: Create cover letter (requires generate_cover_letter=true)
+    5. **Start application**: Begin automated application (requires start_application=true)
+
+    The message_id can be found in Gmail URLs:
+    `https://mail.google.com/mail/u/0/#inbox/{message_id}`
+
+    Example usage:
+    ```
+    POST /api/gmail/process/18abc123def?user_id=<uuid>
+    {
+        "adapt_cv": true,
+        "generate_cover_letter": true
+    }
+    ```
+    """
+    from src.integrations.email.gmail import GmailClient
+    from src.services.email_pipeline import EmailPipelineService, PipelineOptions
+
+    # Get Gmail client for user
+    gmail_client = await GmailClient.for_user(db, user_id)
+    if not gmail_client:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gmail not connected. Please connect Gmail first via /api/gmail/connect/{user_id}",
+        )
+
+    # Fetch single email by ID
+    email_content = gmail_client.get_email_content(message_id)
+    if not email_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Email with message_id '{message_id}' not found",
+        )
+
+    # Build pipeline options
+    req = request or ProcessEmailRequest()
+    options = PipelineOptions(
+        save_job=req.save_job,
+        adapt_cv=req.adapt_cv,
+        generate_cover_letter=req.generate_cover_letter,
+        start_application=req.start_application,
+        language=req.language,
+        devtools_url=req.devtools_url,
+    )
+
+    # Process through pipeline
+    pipeline = EmailPipelineService(db)
+    result = await pipeline.process_email(email_content, user_id, options)
+
+    # Build scanned email info
+    email_info = ScannedEmail(
+        message_id=message_id,
+        subject=result.email_subject or "",
+        sender=result.email_sender or "",
+        received_at=result.email_received_at or "",
+        jobs_extracted=[
+            ExtractedJobInfo(
+                title=j.get("title", ""),
+                company=j.get("company", ""),
+                location=j.get("location"),
+                job_url=j.get("job_url"),
+                source_platform=j.get("source_platform"),
+            )
+            for j in (result.jobs_extracted or [])
+        ],
+    )
+
+    return ProcessEmailResponse(
+        success=result.success,
+        email=email_info,
+        job_id=result.job_id,
+        job_title=result.job_title,
+        job_company=result.job_company,
+        job_url=result.job_url,
+        adapted_cv=result.adapted_cv,
+        cover_letter=result.cover_letter,
+        match_score=result.match_score,
+        skills_matched=result.skills_matched,
+        skills_missing=result.skills_missing,
+        application_session_id=result.application_session_id,
+        application_status=result.application_status,
+        errors=result.errors or [],
+    )

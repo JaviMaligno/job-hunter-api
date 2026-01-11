@@ -600,20 +600,49 @@ class ResumeSessionRequest(BaseModel):
 
 
 @router.get("/v2/diagnostics")
-async def get_v2_diagnostics():
-    """Check configuration and health of V2 application dependencies."""
+async def get_v2_diagnostics(test_session: bool = False):
+    """Check configuration and health of V2 application dependencies.
+
+    Args:
+        test_session: If True, also test creating a browser session
+    """
     import httpx
 
     browser_service_status = "unknown"
     browser_service_error = None
+    session_test_result = None
+    session_test_error = None
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Health check
             response = await client.get(f"{settings.browser_service_url}/health")
             if response.status_code == 200:
                 browser_service_status = "healthy"
             else:
                 browser_service_status = f"unhealthy ({response.status_code})"
+
+            # Session creation test
+            if test_session and browser_service_status == "healthy":
+                try:
+                    session_response = await client.post(
+                        f"{settings.browser_service_url}/sessions",
+                        json={"mode": "playwright", "headless": True},
+                        timeout=60.0,
+                    )
+                    if session_response.status_code == 200:
+                        session_data = session_response.json()
+                        session_id = session_data.get("session_id")
+                        session_test_result = f"success (session_id: {session_id})"
+                        # Clean up
+                        await client.delete(f"{settings.browser_service_url}/sessions/{session_id}")
+                    else:
+                        session_test_result = f"failed ({session_response.status_code})"
+                        session_test_error = session_response.text
+                except Exception as e:
+                    session_test_result = "exception"
+                    session_test_error = str(e)
+
     except Exception as e:
         browser_service_status = "unreachable"
         browser_service_error = str(e)
@@ -622,6 +651,8 @@ async def get_v2_diagnostics():
         "browser_service_url": settings.browser_service_url,
         "browser_service_status": browser_service_status,
         "browser_service_error": browser_service_error,
+        "session_test_result": session_test_result,
+        "session_test_error": session_test_error,
         "default_browser_mode": settings.default_browser_mode,
         "gemini_available": GEMINI_AVAILABLE,
     }

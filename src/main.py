@@ -108,6 +108,44 @@ async def health():
     }
 
 
+@app.get("/test-browser-client")
+async def test_browser_client():
+    """Test browser service client from API context (same pattern as FormFillerAgent)."""
+    from src.automation.client import BrowserServiceClient
+    from src.browser_service.models import BrowserMode
+
+    client = BrowserServiceClient()
+    try:
+        # Use EXACT same pattern as FormFillerAgent - manual __aenter__, no health check
+        await client.__aenter__()
+        # Create session with EXACT same params as FormFillerAgent
+        # FormFillerAgent calls: create_session(mode=BrowserMode.PLAYWRIGHT, headless=False, devtools_url=None)
+        session = await client.create_session(
+            mode=BrowserMode.PLAYWRIGHT,
+            headless=False,  # FormFillerAgent uses headless=False by default
+            devtools_url=None,
+        )
+        session_id = session.session_id
+        # Clean up
+        await client.__aexit__(None, None, None)
+        return {
+            "status": "ok",
+            "session_id": session_id,
+        }
+    except Exception as e:
+        import traceback
+
+        try:
+            await client.__aexit__(None, None, None)
+        except Exception:
+            pass
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
+
+
 # Test WebSocket endpoint (for debugging 403 issue)
 from fastapi import WebSocket
 

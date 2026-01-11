@@ -196,7 +196,7 @@ class GmailClient:
         # Fetch full message content
         emails = []
         for msg in messages:
-            email_data = self._get_email_content(msg["id"])
+            email_data = self.get_email_content(msg["id"])
             if email_data:
                 emails.append(email_data)
 
@@ -222,14 +222,14 @@ class GmailClient:
 
         emails = []
         for msg in messages:
-            email_data = self._get_email_content(msg["id"])
+            email_data = self.get_email_content(msg["id"])
             if email_data:
                 emails.append(email_data)
 
         return emails
 
-    def _get_email_content(self, message_id: str) -> dict[str, Any] | None:
-        """Fetch and parse a single email by ID."""
+    def get_email_content(self, message_id: str) -> dict[str, Any] | None:
+        """Fetch and parse a single email by ID (public method)."""
         try:
             message = (
                 self.service.users()
