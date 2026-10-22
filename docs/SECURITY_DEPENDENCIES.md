@@ -32,7 +32,13 @@ workflow or stored checkpoint is transformed by this patch.
 Docker and CI bootstrap the SHA256-verified pip 26.2.2 wheel before resolving
 packages, install certifi 2026.10.19 and Poetry 2.3.2, and use Python 3.11.17.
 Docker installs the committed production lock with `--only main --no-root` before
-copying the application. Updated base images still need a separately authorized
+copying the application. Poetry and virtualenv stay in the global tooling
+environment; application packages install into `/app/.venv`, which supplies the
+runtime PATH. This preserves Langfuse2's packaging<25 requirement without
+downgrading the tooling environment's packaging>=26.3. Ready PRs build the image
+once when container inputs change and run `pip check` in both environments with
+network disabled and no application startup. No such image check was run locally.
+Updated base images still need a separately authorized
 fresh pull and uncached rebuild; these source changes do not establish a live
 deployment or image build.
 

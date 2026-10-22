@@ -3,6 +3,10 @@ FROM python:3.11.17-slim-bookworm
 
 WORKDIR /app
 
+# Keep Poetry/virtualenv tooling separate from the application's locked packages.
+ENV POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_VIRTUALENVS_IN_PROJECT=true
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -17,8 +21,9 @@ RUN python -m pip install --no-cache-dir "pip @ https://files.pythonhosted.org/p
 COPY pyproject.toml poetry.lock ./
 
 # Install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-root --no-interaction --no-ansi
+RUN poetry install --only main --no-root --no-interaction --no-ansi
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
 COPY . .
