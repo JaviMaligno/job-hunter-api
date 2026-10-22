@@ -116,7 +116,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > changed-files.txt
-          if grep -Eq '^(Dockerfile|pyproject.toml|poetry.lock|\.github/workflows/ci.yml)$|^src/' changed-files.txt; then
+          if grep -Eq '^(Dockerfile|pyproject\.toml|poetry\.lock|\.dockerignore|\.github/workflows/ci\.yml)$|^src/' changed-files.txt; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"

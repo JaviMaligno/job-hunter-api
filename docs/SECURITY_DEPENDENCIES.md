@@ -68,3 +68,9 @@ algorithm removal or key migration needs an explicit compatibility decision.
 Sources: [Python CA incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576),
 [virtualenv fixes and bundled pip](https://virtualenv.pypa.io/en/latest/changelog.html),
 [Starlette form limits](https://github.com/Kludex/starlette/security/advisories/GHSA-82w8-qh3p-5jfq).
+
+The Docker build context excludes host virtualenvs, Git metadata, credentials,
+local databases and audit caches. This keeps COPY . . from replacing the image's
+application environment or copying those local files into the image. Changes to
+.dockerignore also select the Ready-only container dependency check. CI explicitly
+grants contents:read and pull-requests:read for its read-only PR path query.
