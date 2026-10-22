@@ -44,7 +44,7 @@ jobs:
         run: poetry run python -c "from src.main import app; print('All imports OK')"
         env:
           APP_ENV: development
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           BEDROCK_ENABLED: "false"
           ANTHROPIC_API_KEY: ""
           GEMINI_API_KEY: ""
