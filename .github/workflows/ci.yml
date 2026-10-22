@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-py3.11.17-${{ hashFiles('pyproject.toml', 'poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
@@ -42,6 +42,16 @@ jobs:
 
       - name: Verify imports
         run: poetry run python -c "from src.main import app; print('All imports OK')"
+        env:
+          APP_ENV: development
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          BEDROCK_ENABLED: "false"
+          ANTHROPIC_API_KEY: ""
+          GEMINI_API_KEY: ""
+          LANGFUSE_SECRET_KEY: ""
+          LANGFUSE_PUBLIC_KEY: ""
+          LANGSMITH_TRACING: "false"
+          LANGCHAIN_TRACING_V2: "false"
 
       - name: Run Ruff linter
         run: |
@@ -77,7 +87,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-py3.11.17-${{ hashFiles('pyproject.toml', 'poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
