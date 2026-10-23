@@ -98,7 +98,7 @@ jobs:
         run: poetry install --no-interaction --no-root
 
       - name: Run tests
-        run: poetry run pytest security_contracts/test_runtime_dependencies.py security_contracts/test_browser_resource.py tests/unit/ -v --tb=short
+        run: poetry run pytest security_contracts/test_jwt_migration.py security_contracts/test_runtime_dependencies.py security_contracts/test_browser_resource.py tests/unit/ -v --tb=short
         env:
           DATABASE_URL: sqlite+aiosqlite:///./test.db
 
