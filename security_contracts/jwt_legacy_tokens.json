@@ -1,0 +1,69 @@
+{
+  "synthetic_only": true,
+  "producer": "python-jose3.5.0",
+  "pyjwt_target": "2.15.1",
+  "algorithms": {
+    "HS256": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJhY2Nlc3MifQ._bWnG2fBA5ekbv0P5JMzp3QtY6rGNK6QsIfelc5Gpa0",
+      "key": "synthetic-jwt-migration-key-only-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "payload": {
+        "sub": "00000000-0000-0000-0000-000000000001",
+        "iat": 1609459200,
+        "exp": 4102444800,
+        "role": "reader",
+        "type": "access"
+      },
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJyZWZyZXNoIn0.z0doALQ7ws5qXWsMgPMq_gb3xXrrwg35lIAQaCnSIkQ"
+    },
+    "HS384": {
+      "token": "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJhY2Nlc3MifQ.Hm3PufTJD2UMphgMSTlkaIAVZgvnQv56ovgzwox--dps8UPRv32zCoRmekvKJEbS",
+      "key": "synthetic-jwt-migration-key-only-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "payload": {
+        "sub": "00000000-0000-0000-0000-000000000001",
+        "iat": 1609459200,
+        "exp": 4102444800,
+        "role": "reader",
+        "type": "access"
+      },
+      "refresh_token": "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJyZWZyZXNoIn0.Z9BdywJ9zyryZU1OxHTZ4k3J0171cvIHi5JTa8FEEJ2nt_nXmxETgaGOMM8lMQBF"
+    },
+    "HS512": {
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJhY2Nlc3MifQ.JO0XPUzM0xOkpSD_i-fHG8XaA6x6pS6HFsaAhaoTy_sHUAAp2mJGmJbPZx1HNfsIzA7IzELjRX_CyM_dPinBIQ",
+      "key": "synthetic-jwt-migration-key-only-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "payload": {
+        "sub": "00000000-0000-0000-0000-000000000001",
+        "iat": 1609459200,
+        "exp": 4102444800,
+        "role": "reader",
+        "type": "access"
+      },
+      "refresh_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJyZWZyZXNoIn0.4FCl8ZYoLbMdQVEehSdOMtOaW8-JpiRAkzvff007XRiNmZo1lbv-dIrjxDfkmE-wS9fQO3dIg8ABz3BljhEDgw"
+    },
+    "RS256": {
+      "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJhY2Nlc3MifQ.qsYMjcgFTJDZBKoxs53HCvs4y2APtkvJ41ezI57qm7aARJgUUtB7OC54jjF5JCyIkO-a9ugxUKeMz4gDgaGQ2sIHwZVNu27lR6XfXXT6MJij-VPxto4CAgpM6ekk50l9kJJZBQx8FYcFjnqrFOgXuWm5W5X82-Gxav7pJSGYgIfc-tok_myOSevyxz1rTKiDmKaHXJSJ_GsRl2Y6eHWgSni-mZgsEchygZWXffHg9B5jN76yTg2EWTqOM1-F4poN2ubGTxBkLkVtC1xO2lPzq-9XZbi_vPjDf4FrCgqmPtQFwdeXVTH-2DbDeUaAcW50L-s4dfesAAnCl8ciAqAkdw",
+      "key": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArv+7jd73ykZerd6Te/E8\nghUT2K0jjqVX3UFNZkzvD+0AhYFpocllpZWnrjNmOQrKZnIwkOhAIbhrZVdpGHgy\nk5zckYDDB7ZRT0po3dD5KxIv6HtmXbL3iRTZFxyR2KpT81xcuOhos5k8v25FZR3n\nssDRHyMTt0H7qb5eFsAf//PZ7OVWG/86g1/HYQ85AE1BWmEW4QCWNok/bZcgOGp8\nGFdF7Ge73CzFil2jMO+v97z8mPgk5DMPdHRlnVL0cEViJKqgIMvyI0KD2565DZHh\nmJHOoyRpMhv2uIQFWHPDIb7SPZbZSMjFYDXxUDA8iJJ/z8jL2JqZa3BHbuPCfqH/\nVwIDAQAB\n-----END PUBLIC KEY-----\n",
+      "payload": {
+        "sub": "00000000-0000-0000-0000-000000000001",
+        "iat": 1609459200,
+        "exp": 4102444800,
+        "role": "reader",
+        "type": "access"
+      },
+      "public_der_base64": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArv+7jd73ykZerd6Te/E8ghUT2K0jjqVX3UFNZkzvD+0AhYFpocllpZWnrjNmOQrKZnIwkOhAIbhrZVdpGHgyk5zckYDDB7ZRT0po3dD5KxIv6HtmXbL3iRTZFxyR2KpT81xcuOhos5k8v25FZR3nssDRHyMTt0H7qb5eFsAf//PZ7OVWG/86g1/HYQ85AE1BWmEW4QCWNok/bZcgOGp8GFdF7Ge73CzFil2jMO+v97z8mPgk5DMPdHRlnVL0cEViJKqgIMvyI0KD2565DZHhmJHOoyRpMhv2uIQFWHPDIb7SPZbZSMjFYDXxUDA8iJJ/z8jL2JqZa3BHbuPCfqH/VwIDAQAB",
+      "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJyZWZyZXNoIn0.kVc6EInyXv35-hELrt6Mg8xRphF_yvNTBp895N6W-kjMw91p3Vp-FuoregZ8a7pc4LwkFYb5t8R_1xdXpEO234fWfXCpGITdzo3Ii-W1_jIJeA7jAeZ4TxKGuROtODmCN8Ka0zv9JScnigM8RTnAqFqXt0Whsa8Ah08t836I9rV1NWhXAhGcyJCLs3qSFeHGxGkJgrcSd9Y_zLIBHB_c9EFcoksYxt2A1nesMxsadk9h_fUGI2oXIBDlpjgTd5mt7OVOnLyu_WTlNd8I6ofLVAUvfmYeC-zfd3wbY9jnFMhXp1xekmntMo7j6dQj3MesqD7sme04g7T6Lt07UnDvVA"
+    },
+    "ES256": {
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJhY2Nlc3MifQ.P1LRV7NINfdudErqWQpZLkN-5wRK8aPtmvC3YGYnb8pfc7zlTMXeHu1jV8XviVZFAc_UzihkexMhfIGRuTgLRg",
+      "key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaXqgDRej4fCbqSSYcGW7b5OSOXGP\nKyhMZcWARO6MnzbdgLx9CF65QUIZT67GZDhObLsxZs0UjiBYcP744qyEvg==\n-----END PUBLIC KEY-----\n",
+      "payload": {
+        "sub": "00000000-0000-0000-0000-000000000001",
+        "iat": 1609459200,
+        "exp": 4102444800,
+        "role": "reader",
+        "type": "access"
+      },
+      "public_der_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaXqgDRej4fCbqSSYcGW7b5OSOXGPKyhMZcWARO6MnzbdgLx9CF65QUIZT67GZDhObLsxZs0UjiBYcP744qyEvg==",
+      "refresh_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE2MDk0NTkyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZSI6InJlYWRlciIsInR5cGUiOiJyZWZyZXNoIn0.v5N_Cv8T74Gn4DbW4ZIqCz2TxueF5A2xX6AoC_Ng8FzX6lUDG4R8QR9uVeYu_9qkDsDaZqH1zWlz_paj3bmZGA"
+    }
+  }
+}

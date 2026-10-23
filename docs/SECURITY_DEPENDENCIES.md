@@ -58,12 +58,12 @@ step for this patch.
 
 ## Residual advisories
 
-python-jose 3.5.0 has no released fix for DER public-key algorithm confusion
-(GHSA-3qf3-8w2g-rqmx). The service retains its configured algorithm allowlist;
-tests cover legitimate HS256/RS256 PEM keys and mismatched HMAC rejection. They
-do not prove arbitrary custom algorithm/key configurations safe. ECDSA 0.19.2
-also retains the unfixed Minerva timing advisory (GHSA-wj6h-64fc-37mp). Any
-algorithm removal or key migration needs an explicit compatibility decision.
+The original python-jose/ECDSA findings remain unfixed upstream
+(GHSA-3qf3-8w2g-rqmx and GHSA-wj6h-64fc-37mp). The later
+[JWT migration](jwt-migration.md) replaces jose with PyJWT 2.15.1 and removes both
+packages from the application lock, with explicit old/new token, key-format,
+claim-validation and HTTP error contracts. No upstream fix or globally clean
+graph is implied. Google Auth's RSA/ASN.1 requirements remain in place.
 
 Sources: [Python CA incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576),
 [virtualenv fixes and bundled pip](https://virtualenv.pypa.io/en/latest/changelog.html),

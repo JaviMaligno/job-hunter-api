@@ -1,6 +1,10 @@
 """Synthetic offline compatibility: no main app, providers or persistent data."""
 
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -8,11 +12,24 @@ from uuid import UUID
 
 import bcrypt
 import httpx
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, Request
-from jose import jwt
+
+
+def _public_der_hmac_token(claims, public_der):
+    """Construct an attack token without asking a hardened signer to accept DER."""
+
+    def segment(value):
+        return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).rstrip(
+            b"="
+        )
+
+    signed = segment({"alg": "HS256", "typ": "JWT"}) + b"." + segment(claims)
+    signature = hmac.new(public_der, signed, hashlib.sha256).digest()
+    return (signed + b"." + base64.urlsafe_b64encode(signature).rstrip(b"=")).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +98,7 @@ def test_configured_rsa_pem_and_der_hmac_confusion(tokens, monkeypatch):
     )
     claims = {"sub": "synthetic-user", "type": "access"}
     valid = jwt.encode(claims, private, algorithm="RS256")
-    attack = jwt.encode(claims, der, algorithm="HS256")
+    attack = _public_der_hmac_token(claims, der)
     monkeypatch.setattr(tokens.settings, "jwt_algorithm", "RS256")
     monkeypatch.setattr(tokens.settings, "jwt_secret_key", public)
     assert tokens.verify_token(valid)["sub"] == "synthetic-user"
