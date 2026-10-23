@@ -90,7 +90,7 @@ def _verification_key(key: str | bytes, algorithm: str) -> str | bytes | RSAPubl
     """Keep the existing RSA private-PEM/certificate verification formats."""
     if algorithm not in {"RS256", "RS384", "RS512"}:
         return key
-    encoded = key.encode("utf-8") if isinstance(key, str) else key
+    encoded = (key.encode("utf-8") if isinstance(key, str) else key).lstrip()
     try:
         if encoded.startswith(b"-----BEGIN CERTIFICATE-----"):
             public = load_pem_x509_certificate(encoded).public_key()

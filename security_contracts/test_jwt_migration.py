@@ -314,7 +314,15 @@ def test_signed_role_claim_does_not_replace_database_principal(auth):
     assert actual.tier == "free"
 
 
-@pytest.mark.parametrize("verification_format", ["private-pem", "certificate-pem"])
+@pytest.mark.parametrize(
+    "verification_format",
+    [
+        "private-pem",
+        "certificate-pem",
+        "private-pem-leading-newline",
+        "certificate-pem-leading-newline",
+    ],
+)
 def test_rsa_verification_preserves_existing_configured_key_formats(auth, verification_format):
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes
@@ -326,7 +334,8 @@ def test_rsa_verification_preserves_existing_configured_key_formats(auth, verifi
     )
     auth.configure(private, "RS256")
     token = _issue_access(auth)
-    if verification_format == "certificate-pem":
+    verification_key = private
+    if verification_format.startswith("certificate-pem"):
         subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "synthetic.invalid")])
         certificate = (
             x509.CertificateBuilder()
@@ -338,8 +347,17 @@ def test_rsa_verification_preserves_existing_configured_key_formats(auth, verifi
             .not_valid_after(datetime(2100, 1, 1, tzinfo=UTC))
             .sign(key, hashes.SHA256())
         )
-        auth.configure(certificate.public_bytes(serialization.Encoding.PEM), "RS256")
+        verification_key = certificate.public_bytes(serialization.Encoding.PEM)
+    if verification_format.endswith("leading-newline"):
+        verification_key = b"\n" + verification_key
+    auth.configure(verification_key, "RS256")
     assert auth.module.verify_token(token)["sub"] == SUBJECT
+
+    # RSA format normalization must never trim a configured HMAC secret.
+    hmac_key = "\n" + SECRET + " \n"
+    auth.configure(hmac_key, "HS256")
+    assert auth.module.verify_token(_signed(_claims(), key=hmac_key))["sub"] == SUBJECT
+    _rejected(auth, _signed(_claims(), key=hmac_key.strip()))
 
 
 @pytest.mark.parametrize(

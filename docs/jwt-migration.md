@@ -54,7 +54,9 @@ synthetic tokens and public keys only, plus an explicitly invented shared test
 secret; RSA/EC private keys exist only in memory. Future tests load these fixtures
 without adding jose back as a development dependency.
 
-The final focused selection passes 38 cases. It covers old/new tokens, refresh
+The initial migration focused selection passed 38 cases. The subsequent
+RSA-whitespace follow-up passes four private/certificate cases with and without
+leading newlines, and asserts that HMAC secret whitespace stays significant. It covers old/new tokens, refresh
 semantics where present, malformed claims, algorithm/key mismatch, unsigned
 input, approved date tightenings, and actual authentication dependencies. Real
 HTTP/DNS, subprocess startup, provider constructors, database connections and
@@ -74,3 +76,9 @@ focus environments, which may still contain the former packages for legacy
 proof; complete fresh installs use the committed lock. Final-head hosted CI,
 independent review and image checks remain separate gates. No full local suite,
 server, browser, Docker build, push, deployment or merge is part of this patch.
+
+The RSA adapter normalizes leading PEM whitespace only after selecting a trusted
+RS algorithm. HS and ES key bytes keep their original treatment. Four new RED
+failures across the two configurable services preceded this correction; the eight
+focused key-format cases pass afterwards without repeating the earlier 99-case
+batch.
