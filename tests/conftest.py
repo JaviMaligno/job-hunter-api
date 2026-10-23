@@ -106,6 +106,7 @@ We're looking for an AI Engineer to build next-generation conversational AI syst
 def cv_adapter_output_json():
     """Expected JSON output from CV adapter."""
     return """{
+    "detected_language": "en",
     "adapted_cv": "# Javier Aguilar Martín\\n\\n**AI & ML Engineer specialized in Conversational AI**...",
     "match_score": 85,
     "changes_made": [

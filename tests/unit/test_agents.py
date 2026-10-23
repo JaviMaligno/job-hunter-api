@@ -45,6 +45,7 @@ class TestCVAdapterAgent:
         """Test output model validation."""
         output = CVAdapterOutput.model_validate_json(cv_adapter_output_json)
 
+        assert output.detected_language == "en"
         assert output.match_score == 85
         assert len(output.changes_made) == 3
         assert "Python" in output.skills_matched
@@ -76,6 +77,7 @@ class TestCVAdapterAgent:
                 result = await agent.run(input_data)
 
             assert isinstance(result, CVAdapterOutput)
+            assert result.detected_language == "en"
             assert result.match_score == 85
             assert "Python" in result.skills_matched
 
@@ -143,6 +145,7 @@ class TestCVAdapterOutputModel:
         """Test match score bounds."""
         # Valid scores
         output = CVAdapterOutput(
+            detected_language="en",
             adapted_cv="test",
             match_score=85,
             changes_made=[],
@@ -150,10 +153,12 @@ class TestCVAdapterOutputModel:
             skills_missing=[],
             key_highlights=[],
         )
+        assert output.detected_language == "en"
         assert output.match_score == 85
 
         # Boundary values
         output_min = CVAdapterOutput(
+            detected_language="en",
             adapted_cv="test",
             match_score=0,
             changes_made=[],
@@ -164,6 +169,7 @@ class TestCVAdapterOutputModel:
         assert output_min.match_score == 0
 
         output_max = CVAdapterOutput(
+            detected_language="en",
             adapted_cv="test",
             match_score=100,
             changes_made=[],
@@ -175,8 +181,9 @@ class TestCVAdapterOutputModel:
 
     def test_match_score_out_of_bounds(self):
         """Test match score rejects out of bounds values."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="match_score"):
             CVAdapterOutput(
+                detected_language="en",
                 adapted_cv="test",
                 match_score=101,  # Over 100
                 changes_made=[],
@@ -185,8 +192,9 @@ class TestCVAdapterOutputModel:
                 key_highlights=[],
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="match_score"):
             CVAdapterOutput(
+                detected_language="en",
                 adapted_cv="test",
                 match_score=-1,  # Below 0
                 changes_made=[],

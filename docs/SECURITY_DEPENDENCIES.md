@@ -125,3 +125,26 @@ Earlier successful auth/graph contracts were not repeated for mechanical lint
 and AST-equivalent formatting. Full latest-head hosted CI and image dependency
 checks remain required; no full suite, provider, database, browser, scheduled job,
 Docker build, push, deployment or merge was executed by this local follow-up.
+
+## Existing CV output fixture contract (Ready CI follow-up)
+
+Ready CI at `b00c278` completed 84 selected unit/security cases: 81 passed and
+three CV adapter cases failed because their synthetic responses omitted
+`detected_language`. This field was already required by the model at the original
+source baseline `5c6ac8e`; its prompt already requested it. The fixture JSON and
+all score-validation constructors now provide `"en"` for their English examples,
+with output assertions for that language. Invalid-score fixtures also supply a
+valid language and assert the `match_score` diagnostic, so they cannot pass merely
+because another required field is missing. No model default, optional field,
+prompt or application source changed.
+
+The three original cases reproduce the same missing-field failures locally.
+After the fixture correction, those three plus the related out-of-bounds score
+case pass (four cases). These use the actual locked Langfuse 2.60.10 decorators
+and existing Anthropic response mocks, with provider constructors, HTTP/DNS,
+database connections and dotenv-file loading blocked before collection. No real
+credentials, API requests or business jobs are involved. Only four additional
+exact-lock wheels were needed in the isolated environment (Langfuse, backoff,
+wrapt and pytest-asyncio); `pip check` and scoped Ruff/format checks pass. The
+shared hosted failure log contains the unit job only, so it is not evidence of
+the complete hosted mypy or image job result. Final-head CI remains required.
