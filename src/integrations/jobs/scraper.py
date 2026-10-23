@@ -367,9 +367,7 @@ def _extract_generic_job(html: str) -> ScrapedJob:
     return job
 
 
-def _map_ai_extracted_to_scraped_job(
-    ai_job: AIExtractedJob, platform: str
-) -> ScrapedJob:
+def _map_ai_extracted_to_scraped_job(ai_job: AIExtractedJob, platform: str) -> ScrapedJob:
     """Map AIExtractedJob fields to ScrapedJob dataclass."""
     # Determine job_type from either job_type or employment_type
     job_type = ai_job.job_type or ai_job.employment_type

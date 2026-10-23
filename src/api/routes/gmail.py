@@ -599,7 +599,9 @@ async def scan_emails(
 async def search_emails(
     user_id: UUID,
     db: DbDep,
-    q: Annotated[str, Query(description="Gmail search query (e.g., 'from:j&j', 'subject:job')")] = "",
+    q: Annotated[
+        str, Query(description="Gmail search query (e.g., 'from:j&j', 'subject:job')")
+    ] = "",
     max_results: Annotated[int, Query(description="Max results")] = 10,
 ):
     """
@@ -633,13 +635,15 @@ async def search_emails(
         for msg in messages:
             email_data = gmail_client.get_email_content(msg["id"])
             if email_data:
-                emails.append({
-                    "message_id": email_data["message_id"],
-                    "subject": email_data["subject"],
-                    "sender": email_data["sender"],
-                    "received_at": email_data["received_at"],
-                    "snippet": email_data["snippet"],
-                })
+                emails.append(
+                    {
+                        "message_id": email_data["message_id"],
+                        "subject": email_data["subject"],
+                        "sender": email_data["sender"],
+                        "received_at": email_data["received_at"],
+                        "snippet": email_data["snippet"],
+                    }
+                )
 
         return {"total": len(emails), "emails": emails}
     except Exception as e:

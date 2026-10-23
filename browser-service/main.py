@@ -47,6 +47,7 @@ else:
 
 class SessionCreateRequest(BaseModel):
     """Request to create a browser session."""
+
     headless: bool = True
     viewport_width: int = 1280
     viewport_height: int = 720
@@ -57,6 +58,7 @@ class SessionCreateRequest(BaseModel):
 
 class SessionCreateResponse(BaseModel):
     """Response after creating a session."""
+
     session_id: str
     status: str = "active"
     mode: str = "playwright"
@@ -66,12 +68,14 @@ class SessionCreateResponse(BaseModel):
 
 class NavigateRequest(BaseModel):
     """Request to navigate to a URL."""
+
     url: str
     wait_until: str = "load"  # load, domcontentloaded, networkidle
 
 
 class NavigateResponse(BaseModel):
     """Response after navigation."""
+
     success: bool
     action: str = "navigate"
     duration_ms: int = 0
@@ -82,17 +86,20 @@ class NavigateResponse(BaseModel):
 
 class FillRequest(BaseModel):
     """Request to fill a form field."""
+
     selector: str
     value: str
 
 
 class ClickRequest(BaseModel):
     """Request to click an element."""
+
     selector: str
 
 
 class ScreenshotResponse(BaseModel):
     """Response with screenshot data."""
+
     success: bool
     screenshot_base64: str | None = None
     error: str | None = None
@@ -100,12 +107,14 @@ class ScreenshotResponse(BaseModel):
 
 class EvaluateRequest(BaseModel):
     """Request to evaluate JavaScript."""
+
     script: str
     args: list | None = None
 
 
 class EvaluateResponse(BaseModel):
     """Response from JavaScript evaluation."""
+
     success: bool
     action: str = "evaluate"
     duration_ms: int = 0
@@ -115,6 +124,7 @@ class EvaluateResponse(BaseModel):
 
 class FormField(BaseModel):
     """Detected form field from DOM."""
+
     selector: str
     field_id: str | None = None
     field_name: str | None = None
@@ -144,6 +154,7 @@ class FormField(BaseModel):
 
 class DOMResponse(BaseModel):
     """Response with DOM information."""
+
     success: bool
     page_url: str = ""
     page_title: str = ""
@@ -181,7 +192,7 @@ class BrowserSession:
         if USE_BROWSERLESS:
             # Connect to Browserless.io cloud service
             browserless_endpoint = f"{BROWSERLESS_URL}?token={BROWSERLESS_TOKEN}"
-            logger.info(f"Connecting to Browserless.io...")
+            logger.info("Connecting to Browserless.io...")
             self._browser = await self._playwright.chromium.connect_over_cdp(browserless_endpoint)
             logger.info("Connected to Browserless.io successfully")
         else:
@@ -228,6 +239,7 @@ class BrowserSession:
     async def navigate(self, url: str, wait_until: str = "load") -> NavigateResponse:
         """Navigate to a URL."""
         import time
+
         start = time.time()
         try:
             await self.page.goto(url, wait_until=wait_until)
@@ -267,7 +279,9 @@ class BrowserSession:
         except Exception as e:
             return ScreenshotResponse(success=False, error=str(e))
 
-    async def get_dom(self, selector: str | None = None, form_fields_only: bool = False) -> DOMResponse:
+    async def get_dom(
+        self, selector: str | None = None, form_fields_only: bool = False
+    ) -> DOMResponse:
         """Get DOM content and form fields."""
         try:
             page_url = self.page.url
@@ -288,7 +302,9 @@ class BrowserSession:
             inputs = await self.page.query_selector_all("input, textarea, select")
             for inp in inputs[:50]:  # Limit to 50 fields
                 tag_name = await inp.evaluate("el => el.tagName.toLowerCase()")
-                field_type = await inp.get_attribute("type") or ("textarea" if tag_name == "textarea" else "text")
+                field_type = await inp.get_attribute("type") or (
+                    "textarea" if tag_name == "textarea" else "text"
+                )
                 field_name = await inp.get_attribute("name") or None
                 field_id = await inp.get_attribute("id") or None
                 placeholder = await inp.get_attribute("placeholder") or None
@@ -302,15 +318,17 @@ class BrowserSession:
                 else:
                     continue  # Skip fields without id or name
 
-                form_fields.append(FormField(
-                    selector=field_selector,
-                    field_id=field_id,
-                    field_name=field_name,
-                    field_type=field_type,
-                    tag_name=tag_name,
-                    placeholder=placeholder,
-                    required=required,
-                ))
+                form_fields.append(
+                    FormField(
+                        selector=field_selector,
+                        field_id=field_id,
+                        field_name=field_name,
+                        field_type=field_type,
+                        tag_name=tag_name,
+                        placeholder=placeholder,
+                        required=required,
+                    )
+                )
 
             return DOMResponse(
                 success=True,
@@ -525,4 +543,5 @@ async def get_current_url(session_id: str) -> dict:
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

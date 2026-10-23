@@ -12,7 +12,10 @@ class CVAdapterInput(BaseModel):
     job_description: str = Field(description="Full job description text")
     job_title: str = Field(description="Job title")
     company: str = Field(description="Company name")
-    language: str | None = Field(default=None, description="Output language override: 'en' or 'es'. If None, auto-detect from job description.")
+    language: str | None = Field(
+        default=None,
+        description="Output language override: 'en' or 'es'. If None, auto-detect from job description.",
+    )
 
 
 class CVAdapterOutput(BaseModel):
@@ -130,7 +133,10 @@ class CoverLetterInput(BaseModel):
     job_description: str = Field(description="Full job description")
     job_title: str = Field(description="Job title")
     company: str = Field(description="Company name")
-    language: str = Field(default="en", description="Output language: 'en' or 'es' (should use detected_language from CV adapter)")
+    language: str = Field(
+        default="en",
+        description="Output language: 'en' or 'es' (should use detected_language from CV adapter)",
+    )
     tone: str = Field(
         default="professional", description="Tone: professional, enthusiastic, casual"
     )

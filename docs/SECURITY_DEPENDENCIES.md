@@ -83,3 +83,45 @@ that FastAPI registers get_db while provider constructors, HTTP transports and
 database connect are blocked. It passed locally without calling endpoints or
 starting lifespan. The focused environment lacks optional Gemini SDKs; full
 latest-head hosted main import remains required evidence for that broader graph.
+
+## Draft CI lint follow-up (23 October 2026)
+
+The follow-up begins at `557dace9f0d0438f3299e82386c26b6b17e51cc3`.
+Ruff 0.8.6 reproduced the 24 remaining diagnostics and 18 files requiring
+formatting. The patch removes unused imports/locals, redundant f-string prefixes
+and the redundant inner settings import; uses Python 3.11's identical built-in
+TimeoutError alias; and sorts imports. It does not add suppressions or change
+lint/type configuration. Provider prompts, authentication, route bodies, document
+output and stored data contracts remain unchanged.
+
+The undefined BrowserServiceClient name was a stale local attribute annotation,
+not a NameError observed while running a business job. The agent already creates
+BrowserlessClient inside its existing async context. Its annotation now names
+that real CDP client, without adding the retired HTTP client or changing the
+factory/transport. The new resource contract first reproduced the unresolved
+annotation; the real page-info mapping contract already passed before the fix.
+
+Focused verification passes:
+
+- Ruff check and format-check across all 131 tracked Python files plus the new
+  contract file: zero diagnostics and 132 files formatted. The formatter changed
+  18 existing files and the new fixture; ASTs before/after formatting are identical.
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest security_contracts/test_browser_resource.py -q --tb=short -p no:cacheprovider`:
+  two contracts pass. The constructor and page-info method use the real
+  Browserless DOM/content/URL methods over synthetic Page/Element objects.
+  Gemini and Playwright SDK boundaries are stand-ins; HTTP transports, provider
+  constructors, database connect, browser startup and dotenv-file loading are
+  blocked. The orchestration job and browser context are never entered.
+  Disabling optional pytest plugins leaves an asyncio_mode configuration warning;
+  these synchronous tests manage their own in-memory event loop.
+- Mypy 1.19.0 from the unchanged lock passes the seven affected agent, route,
+  CLI and service files using the existing configuration and
+  `--ignore-missing-imports`. Its four tool wheels were added to the isolated
+  environment, without a full dependency sync. Optional SDK imports remain
+  missing there, so this does not replace the complete hosted type/import gate.
+- The isolated environment passes `pip check` after that tool installation.
+
+Earlier successful auth/graph contracts were not repeated for mechanical lint
+and AST-equivalent formatting. Full latest-head hosted CI and image dependency
+checks remain required; no full suite, provider, database, browser, scheduled job,
+Docker build, push, deployment or merge was executed by this local follow-up.

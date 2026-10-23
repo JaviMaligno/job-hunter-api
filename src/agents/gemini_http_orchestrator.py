@@ -214,9 +214,6 @@ Always be thorough but cautious - don't submit until all required fields are fil
             auto_solve_captcha: Whether to automatically solve CAPTCHAs
             browser_service_url: Browser Service URL (uses settings if not provided)
         """
-        # Import settings for fallback API keys
-        from src.config import settings
-
         self.api_key = api_key or settings.gemini_api_key or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY not found")
@@ -228,7 +225,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
         self.browser_service_url = browser_service_url
 
         # Browser client (initialized during run)
-        self._browser: BrowserServiceClient | None = None
+        self._browser: BrowserlessClient | None = None
 
         # Initialize CAPTCHA solver if available
         self._captcha_solver: CaptchaSolver | None = None
@@ -292,6 +289,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
                             f"waiting {wait_time}s before retry"
                         )
                         import time
+
                         time.sleep(wait_time)
                         continue
 
@@ -306,6 +304,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
                         f"waiting {wait_time}s before retry: {e}"
                     )
                     import time
+
                     time.sleep(wait_time)
                     continue
 
@@ -323,6 +322,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
                             f"waiting {wait_time}s before retry"
                         )
                         import time
+
                         time.sleep(wait_time)
                         continue
 
@@ -331,6 +331,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
                     )
                     if attempt < retries - 1:
                         import time
+
                         time.sleep(2)
                         continue
                     break
@@ -448,17 +449,11 @@ Always be thorough but cautious - don't submit until all required fields are fil
                                 captcha_solve_attempted=captcha_info.attempted
                                 if captcha_info
                                 else False,
-                                captcha_solve_error=captcha_info.error
-                                if captcha_info
-                                else None,
-                                timeout_minutes=int(
-                                    input_data.intervention_timeout_seconds / 60
-                                ),
+                                captcha_solve_error=captcha_info.error if captcha_info else None,
+                                timeout_minutes=int(input_data.intervention_timeout_seconds / 60),
                             )
 
-                            logger.info(
-                                f"Waiting for intervention {intervention.id} resolution..."
-                            )
+                            logger.info(f"Waiting for intervention {intervention.id} resolution...")
                             (
                                 resolution,
                                 updated_intervention,
@@ -469,9 +464,7 @@ Always be thorough but cautious - don't submit until all required fields are fil
 
                             if resolution and resolution.action == "continue":
                                 steps_completed.append("intervention_resolved")
-                                logger.info(
-                                    "Intervention resolved by user, continuing automation"
-                                )
+                                logger.info("Intervention resolved by user, continuing automation")
                                 await asyncio.sleep(1)
                                 page_info = await self._get_page_info()
                                 blocker = None
@@ -571,14 +564,16 @@ Always be thorough but cautious - don't submit until all required fields are fil
         # Format form fields for Gemini
         form_fields_info = []
         for field in dom_response.form_fields:
-            form_fields_info.append({
-                "selector": field.selector,
-                "type": field.field_type,
-                "name": field.field_name,
-                "label": field.label,
-                "required": field.required,
-                "value": field.current_value,
-            })
+            form_fields_info.append(
+                {
+                    "selector": field.selector,
+                    "type": field.field_type,
+                    "name": field.field_name,
+                    "label": field.label,
+                    "required": field.required,
+                    "value": field.current_value,
+                }
+            )
 
         return {
             "html": html_content[:15000],  # Limit HTML size
@@ -734,7 +729,14 @@ If no blocker, return: {{"type": "none"}}
     async def _click_apply_button(self, page_info: dict) -> bool:
         """Find and click the Apply button."""
         # Try common apply button texts
-        apply_texts = ["Apply", "Apply Now", "Aplicar", "Apply for this job", "Quick Apply", "Easy Apply"]
+        apply_texts = [
+            "Apply",
+            "Apply Now",
+            "Aplicar",
+            "Apply for this job",
+            "Quick Apply",
+            "Easy Apply",
+        ]
 
         for text in apply_texts:
             if await self._click_by_text(text):

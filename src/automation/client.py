@@ -117,7 +117,9 @@ class BrowserServiceClient:
             devtools_url=devtools_url,
         )
 
-        logger.info(f"Creating session at {self.base_url}/sessions with mode={mode}, headless={headless}")
+        logger.info(
+            f"Creating session at {self.base_url}/sessions with mode={mode}, headless={headless}"
+        )
         response = await self.client.post("/sessions", json=request.model_dump())
 
         # Log detailed error info before raising

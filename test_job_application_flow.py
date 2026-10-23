@@ -1,6 +1,7 @@
 """Test full job application automation flow using the API."""
+
 import asyncio
-import json
+
 import httpx
 
 API_URL = "http://localhost:8000"
@@ -96,8 +97,8 @@ async def test_job_application_flow():
         print()
         print("3. Starting job application automation...")
         print(f"   Job URL: {TEST_JOB_URL}")
-        print(f"   Agent: claude")
-        print(f"   Mode: assisted")
+        print("   Agent: claude")
+        print("   Mode: assisted")
 
         request_body = {
             "job_url": TEST_JOB_URL,
@@ -145,6 +146,7 @@ async def test_job_application_flow():
         except Exception as e:
             print(f"   ERROR: {e}")
             import traceback
+
             traceback.print_exc()
 
         # 4. Get session details
@@ -156,7 +158,9 @@ async def test_job_application_flow():
                 sessions = resp.json()
                 print(f"   Total sessions: {len(sessions)}")
                 for s in sessions[:3]:
-                    print(f"   - {s['session_id'][:8]}... | {s['status']} | {s['fields_filled']} fields")
+                    print(
+                        f"   - {s['session_id'][:8]}... | {s['status']} | {s['fields_filled']} fields"
+                    )
         except Exception as e:
             print(f"   ERROR: {e}")
 

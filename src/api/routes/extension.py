@@ -8,7 +8,6 @@ for local browser automation.
 import asyncio
 import logging
 from typing import Any
-from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -117,7 +116,7 @@ class ExtensionConnectionManager:
             response = await asyncio.wait_for(response_future, timeout=timeout)
             return response
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Command {command_type} timed out (id={msg_id})")
             raise
         except Exception as e:
@@ -226,11 +225,13 @@ async def extension_websocket(websocket: WebSocket):
 
             if msg_type == "EXTENSION_CONNECTED":
                 # Handshake response
-                await websocket.send_json({
-                    "type": "HANDSHAKE_ACK",
-                    "server": "job-hunter-api",
-                    "version": "1.0.0",
-                })
+                await websocket.send_json(
+                    {
+                        "type": "HANDSHAKE_ACK",
+                        "server": "job-hunter-api",
+                        "version": "1.0.0",
+                    }
+                )
 
             elif msg_type == "PONG":
                 # Ping response - handled by send_command
@@ -298,7 +299,7 @@ async def test_extension():
     try:
         response = await manager.send_command("PING", {}, timeout=5.0)
         return {"success": True, "response": response}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"success": False, "error": "Extension did not respond (timeout)"}
     except Exception as e:
         return {"success": False, "error": str(e)}

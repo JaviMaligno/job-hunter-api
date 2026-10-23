@@ -1,5 +1,7 @@
 """Test browser API integration - simpler test for Render free tier."""
+
 import asyncio
+
 from src.automation.client import BrowserServiceClient
 from src.config import settings
 
@@ -68,5 +70,6 @@ async def test_browser_integration():
 
 if __name__ == "__main__":
     import sys
+
     success = asyncio.run(test_browser_integration())
     sys.exit(0 if success else 1)
