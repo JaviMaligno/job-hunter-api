@@ -18,7 +18,7 @@ from fastapi import (
 from pydantic import BaseModel, Field
 
 from src.agents.form_filler import FormFillerAgent, FormFillerInput, FormFillerOutput
-from src.api.dependencies import ClaudeDep
+from src.api.dependencies import ClaudeDep, DbDep
 from src.api.websocket_manager import WebSocketMessage, get_connection_manager
 from src.automation.models import UserFormData
 from src.automation.session_store import SessionState, get_session_store
@@ -1472,7 +1472,7 @@ async def delete_v2_session(session_id: str):
 
 
 @router.post("/v2/sessions/{session_id}/mark-applied")
-async def mark_session_applied(session_id: str, db: DBSession):
+async def mark_session_applied(session_id: str, db: DbDep):
     """Mark a session as applied (update associated job status)."""
     session_store = get_session_store()
     session = await session_store.load(session_id)

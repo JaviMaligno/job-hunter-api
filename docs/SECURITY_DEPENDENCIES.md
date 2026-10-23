@@ -74,3 +74,12 @@ local databases and audit caches. This keeps COPY . . from replacing the image's
 application environment or copying those local files into the image. Changes to
 .dockerignore also select the Ready-only container dependency check. CI explicitly
 grants contents:read and pull-requests:read for its read-only PR path query.
+
+Hosted CI's real main import exposed an existing undefined DBSession annotation
+on mark_session_applied. The router now uses the existing DbDep dependency alias,
+with no change to its endpoint body, authentication or data operations. The focused
+security_contracts/test_application_import.py imports the real router and checks
+that FastAPI registers get_db while provider constructors, HTTP transports and
+database connect are blocked. It passed locally without calling endpoints or
+starting lifespan. The focused environment lacks optional Gemini SDKs; full
+latest-head hosted main import remains required evidence for that broader graph.
