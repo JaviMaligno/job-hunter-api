@@ -1,0 +1,5 @@
+# Install in a separate tooling environment, never the application Poetry venv.
+pre-commit==4.5.0
+virtualenv==21.14.13
+pip==26.2.2
+certifi==2026.10.19

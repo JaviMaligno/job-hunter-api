@@ -66,7 +66,6 @@ class DocumentGenerator:
 
         # Process content - split by common CV sections
         lines = content.split("\n")
-        current_section = None
 
         for line in lines:
             line = line.strip()
@@ -103,7 +102,6 @@ class DocumentGenerator:
                 # Clean header text
                 header_text = line.lstrip("#").strip()
                 doc.add_heading(header_text, level=1)
-                current_section = header_text
             elif line.startswith("- ") or line.startswith("• "):
                 # Bullet point
                 p = doc.add_paragraph(line[2:], style="List Bullet")
@@ -141,7 +139,7 @@ class DocumentGenerator:
 
         # Add recipient info if company provided
         if metadata.company:
-            doc.add_paragraph(f"To: Hiring Manager")
+            doc.add_paragraph("To: Hiring Manager")
             doc.add_paragraph(metadata.company)
             if metadata.job_title:
                 doc.add_paragraph(f"Re: {metadata.job_title}")
@@ -204,21 +202,25 @@ class DocumentGenerator:
                 continue
 
             # Detect section headers
-            is_header = line.isupper() or line.startswith("#") or any(
-                section in line.upper()
-                for section in [
-                    "EXPERIENCE",
-                    "EDUCATION",
-                    "SKILLS",
-                    "SUMMARY",
-                    "PROFILE",
-                    "PROJECTS",
-                    "EXPERIENCIA",
-                    "EDUCACIÓN",
-                    "HABILIDADES",
-                    "PERFIL",
-                    "PROYECTOS",
-                ]
+            is_header = (
+                line.isupper()
+                or line.startswith("#")
+                or any(
+                    section in line.upper()
+                    for section in [
+                        "EXPERIENCE",
+                        "EDUCATION",
+                        "SKILLS",
+                        "SUMMARY",
+                        "PROFILE",
+                        "PROJECTS",
+                        "EXPERIENCIA",
+                        "EDUCACIÓN",
+                        "HABILIDADES",
+                        "PERFIL",
+                        "PROYECTOS",
+                    ]
+                )
             )
 
             if is_header:

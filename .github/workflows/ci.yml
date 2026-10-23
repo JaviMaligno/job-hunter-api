@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('branch-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   lint-and-type-check:
@@ -16,21 +25,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.11.17"
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: 1.8.0
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Bootstrap patched pip and Poetry
+        run: |
+          python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+          python -m pip install "certifi==2026.10.19" "poetry==2.3.2" "virtualenv>=21.14.13,<22"
+          poetry config virtualenvs.in-project true
 
       - name: Load cached venv
         id: cached-poetry-dependencies
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-py3.11.17-${{ hashFiles('pyproject.toml', 'poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
@@ -38,13 +46,19 @@ jobs:
 
       - name: Verify imports
         run: poetry run python -c "from src.main import app; print('All imports OK')"
+        env:
+          APP_ENV: development
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          BEDROCK_ENABLED: "false"
+          ANTHROPIC_API_KEY: ""
+          GEMINI_API_KEY: ""
+          LANGFUSE_SECRET_KEY: ""
+          LANGFUSE_PUBLIC_KEY: ""
+          LANGSMITH_TRACING: "false"
+          LANGCHAIN_TRACING_V2: "false"
 
-      - name: Run Ruff linter (auto-fix first)
+      - name: Run Ruff linter
         run: |
-          # Try to auto-fix any issues
-          poetry run ruff check . --fix || true
-          poetry run ruff format . || true
-          # Check if there are unfixed issues
           poetry run ruff check .
           poetry run ruff format --check .
 
@@ -52,6 +66,9 @@ jobs:
         run: poetry run mypy src/ --ignore-missing-imports
 
   test:
+    # Draft PRs keep lightweight validation; Ready runs the full unit suite.
+    # A merge to main reuses the PR result instead of repeating the suite.
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     needs: lint-and-type-check
 
@@ -61,27 +78,54 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.11.17"
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: 1.8.0
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Bootstrap patched pip and Poetry
+        run: |
+          python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+          python -m pip install "certifi==2026.10.19" "poetry==2.3.2" "virtualenv>=21.14.13,<22"
+          poetry config virtualenvs.in-project true
 
       - name: Load cached venv
         id: cached-poetry-dependencies
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-py3.11.17-${{ hashFiles('pyproject.toml', 'poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
       - name: Run tests
-        run: poetry run pytest tests/unit/ -v --tb=short
+        run: poetry run pytest security_contracts/test_jwt_migration.py security_contracts/test_runtime_dependencies.py security_contracts/test_browser_resource.py tests/unit/ -v --tb=short
         env:
           DATABASE_URL: sqlite+aiosqlite:///./test.db
+
+  container-dependencies:
+    # Build the runtime once on Ready when its inputs change; no app startup.
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    needs: lint-and-type-check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect container input paths
+        id: inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > changed-files.txt
+          if grep -Eq '^(Dockerfile|pyproject\.toml|poetry\.lock|\.dockerignore|\.github/workflows/ci\.yml)$|^src/' changed-files.txt; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build dependency image
+        if: steps.inputs.outputs.changed == 'true'
+        run: docker build --pull --no-cache --tag job-hunter-dependencies .
+      - name: Check isolated tooling and application dependencies
+        if: steps.inputs.outputs.changed == 'true'
+        run: |
+          docker run --rm --network none --entrypoint /usr/local/bin/python job-hunter-dependencies -m pip check
+          docker run --rm --network none --entrypoint /app/.venv/bin/python job-hunter-dependencies -m pip check

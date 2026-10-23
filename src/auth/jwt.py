@@ -5,7 +5,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from jose import JWTError, jwt
+import jwt
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.x509 import load_pem_x509_certificate
+from jwt import PyJWTError
 
 from src.config import settings
 
@@ -81,6 +86,27 @@ def create_refresh_token(user_id: UUID) -> tuple[str, str, datetime]:
     return token, token_hash, expire
 
 
+def _verification_key(key: str | bytes, algorithm: str) -> str | bytes | RSAPublicKey:
+    """Keep the existing RSA private-PEM/certificate verification formats."""
+    if algorithm not in {"RS256", "RS384", "RS512"}:
+        return key
+    encoded = (key.encode("utf-8") if isinstance(key, str) else key).lstrip()
+    try:
+        if encoded.startswith(b"-----BEGIN CERTIFICATE-----"):
+            public = load_pem_x509_certificate(encoded).public_key()
+            if not isinstance(public, RSAPublicKey):
+                raise jwt.InvalidKeyError("Expected an RSA verification certificate")
+            return public
+        if encoded.startswith((b"-----BEGIN PRIVATE KEY-----", b"-----BEGIN RSA PRIVATE KEY-----")):
+            private = load_pem_private_key(encoded, password=None)
+            if not isinstance(private, RSAPrivateKey):
+                raise jwt.InvalidKeyError("Expected an RSA private key")
+            return private.public_key()
+    except (TypeError, ValueError, UnsupportedAlgorithm) as error:
+        raise jwt.InvalidKeyError("Invalid RSA verification key") from error
+    return key
+
+
 def verify_token(token: str, token_type: str = "access") -> dict[str, Any]:
     """Verify and decode a JWT token.
 
@@ -97,9 +123,18 @@ def verify_token(token: str, token_type: str = "access") -> dict[str, Any]:
     try:
         payload = jwt.decode(
             token,
-            settings.jwt_secret_key,
+            _verification_key(settings.jwt_secret_key, settings.jwt_algorithm),
             algorithms=[settings.jwt_algorithm],
         )
+
+        # Preserve existing audience/OIDC rejection after signature validation.
+        # No caller supplies an expected audience or a separate OIDC access token.
+        if "aud" in payload:
+            raise jwt.InvalidAudienceError("Invalid audience")
+        if "at_hash" in payload:
+            raise jwt.InvalidTokenError(
+                "No access_token provided to compare against at_hash claim."
+            )
 
         # Verify token type
         if payload.get("type") != token_type:
@@ -111,7 +146,7 @@ def verify_token(token: str, token_type: str = "access") -> dict[str, Any]:
 
         return payload
 
-    except JWTError as e:
+    except PyJWTError as e:
         raise TokenError(f"Invalid token: {e!s}") from e
 
 

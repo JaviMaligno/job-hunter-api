@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 def _clean_email_html(html_content: str, max_length: int = 15000) -> str:
     """Simple HTML cleaning for email content using BeautifulSoup only."""
     import re
+
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html_content, "html.parser")
@@ -51,9 +52,7 @@ def _clean_email_html(html_content: str, max_length: int = 15000) -> str:
     return text.strip()
 
 
-async def parse_email_with_gemini(
-    body: str, subject: str, sender: str
-) -> list[ExtractedJob]:
+async def parse_email_with_gemini(body: str, subject: str, sender: str) -> list[ExtractedJob]:
     """Parse email content using Gemini AI for better extraction.
 
     Falls back to empty list if Gemini is not configured or fails.
@@ -107,6 +106,7 @@ Only return valid JSON, no markdown or explanation."""
 
                 if response.text:
                     import json
+
                     # Clean response
                     text = response.text.strip()
                     if text.startswith("```json"):
@@ -125,13 +125,17 @@ Only return valid JSON, no markdown or explanation."""
                     extracted = []
                     for job in jobs_data:
                         if job.get("title"):
-                            extracted.append(ExtractedJob(
-                                title=job.get("title", ""),
-                                company=job.get("company", "Unknown"),
-                                location=job.get("location"),
-                                job_url=job.get("job_url"),
-                                source_platform="linkedin" if "linkedin" in sender.lower() else "email",
-                            ))
+                            extracted.append(
+                                ExtractedJob(
+                                    title=job.get("title", ""),
+                                    company=job.get("company", "Unknown"),
+                                    location=job.get("location"),
+                                    job_url=job.get("job_url"),
+                                    source_platform="linkedin"
+                                    if "linkedin" in sender.lower()
+                                    else "email",
+                                )
+                            )
 
                     if extracted:
                         logger.info(f"Gemini extracted {len(extracted)} jobs from email")

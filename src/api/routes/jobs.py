@@ -403,7 +403,9 @@ async def adapt_cv_for_job(
         )
         logger.info("Running CV adapter agent")
         cv_result = await cv_agent.run(cv_input)
-        logger.info(f"CV adaptation complete, match_score: {cv_result.match_score}, detected_language: {cv_result.detected_language}")
+        logger.info(
+            f"CV adaptation complete, match_score: {cv_result.match_score}, detected_language: {cv_result.detected_language}"
+        )
 
         # Generate cover letter using detected language
         logger.info("Creating cover letter agent")
@@ -514,9 +516,6 @@ async def enhance_cv_with_skill(
 
     logger = logging.getLogger(__name__)
     logger.info(f"CV enhance endpoint called for skill: {request.skill_name}")
-
-    # Get API key if available
-    api_key = getattr(claude, "api_key", None)
 
     # Build prompt for CV enhancement
     prompt = f"""You are a professional CV writer. Enhance the following CV by adding the skill "{request.skill_name}" based on the user's experience description.

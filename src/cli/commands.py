@@ -350,7 +350,9 @@ def process_email(
     apply: Annotated[bool, typer.Option("--apply", help="Start automatic application")] = False,
     port: Annotated[int, typer.Option("--port", "-p", help="Chrome DevTools port")] = 9222,
     language: Annotated[str, typer.Option("--lang", "-l", help="Output language (en/es)")] = "en",
-    api_url: Annotated[str, typer.Option("--api-url", help="API base URL")] = "http://localhost:8000",
+    api_url: Annotated[
+        str, typer.Option("--api-url", help="API base URL")
+    ] = "http://localhost:8000",
 ):
     """
     Process a single Gmail message through the job pipeline.
@@ -433,7 +435,9 @@ def process_email(
         if email:
             console.print(f"[bold]Subject:[/bold] {email.get('subject', 'N/A')}")
             console.print(f"[dim]From:[/dim] {email.get('sender', 'N/A')}")
-            console.print(f"[dim]Date:[/dim] {email.get('received_at', 'N/A')[:10] if email.get('received_at') else 'N/A'}")
+            console.print(
+                f"[dim]Date:[/dim] {email.get('received_at', 'N/A')[:10] if email.get('received_at') else 'N/A'}"
+            )
 
         # Job info
         if result.get("job_id"):
@@ -461,7 +465,7 @@ def process_email(
 
         # Application status
         if result.get("application_session_id"):
-            console.print(f"\n[bold]Application:[/bold]")
+            console.print("\n[bold]Application:[/bold]")
             console.print(f"  Session: {result['application_session_id']}")
             console.print(f"  Status: {result.get('application_status', 'N/A')}")
 

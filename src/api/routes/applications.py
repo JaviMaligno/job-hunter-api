@@ -18,7 +18,7 @@ from fastapi import (
 from pydantic import BaseModel, Field
 
 from src.agents.form_filler import FormFillerAgent, FormFillerInput, FormFillerOutput
-from src.api.dependencies import ClaudeDep
+from src.api.dependencies import ClaudeDep, DbDep
 from src.api.websocket_manager import WebSocketMessage, get_connection_manager
 from src.automation.models import UserFormData
 from src.automation.session_store import SessionState, get_session_store
@@ -1472,7 +1472,7 @@ async def delete_v2_session(session_id: str):
 
 
 @router.post("/v2/sessions/{session_id}/mark-applied")
-async def mark_session_applied(session_id: str, db: DBSession):
+async def mark_session_applied(session_id: str, db: DbDep):
     """Mark a session as applied (update associated job status)."""
     session_store = get_session_store()
     session = await session_store.load(session_id)
@@ -1486,8 +1486,8 @@ async def mark_session_applied(session_id: str, db: DBSession):
 
     # Update job status if we can find the associated job
     if session.job_url:
-        from src.db.repositories.job import JobRepository
         from src.db.models import JobStatus
+        from src.db.repositories.job import JobRepository
 
         job_repo = JobRepository(db)
         # Try to find job by URL
@@ -1563,7 +1563,6 @@ async def start_local_application(request: LocalApplicationRequest):
     The user can see and interact with their browser the whole time.
     """
     from src.api.routes.extension import get_extension_manager
-    from src.automation.browserless_client import BrowserlessClient
 
     extension = get_extension_manager()
 
@@ -1622,7 +1621,7 @@ async def start_local_application(request: LocalApplicationRequest):
             fill_instructions=fill_instructions,
         )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return LocalApplicationResponse(
             success=False,
             error="Extension did not respond in time",
@@ -1673,7 +1672,7 @@ async def execute_local_fill(request: ExecuteFillRequest):
             results=result.get("results"),
         )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return ExecuteFillResponse(
             success=False,
             error="Fill operation timed out",
@@ -1712,9 +1711,6 @@ async def _generate_fill_instructions(
         "cover_letter": ["cover", "letter", "carta"],
     }
 
-    # Extract basic info from CV (simplified - would use AI in production)
-    cv_lower = cv_content.lower()
-
     for field in form_fields:
         selector = field.get("selector", "")
         field_name = (field.get("name") or field.get("label") or "").lower()
@@ -1735,31 +1731,37 @@ async def _generate_fill_instructions(
                 if data_key == "email":
                     # Try to extract email from CV
                     import re
-                    emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', cv_content)
+
+                    emails = re.findall(r"[\w.+-]+@[\w-]+\.[\w.-]+", cv_content)
                     value = emails[0] if emails else ""
                 elif data_key == "phone":
                     # Try to extract phone from CV
                     import re
-                    phones = re.findall(r'[\+]?[\d\s\-\(\)]{10,}', cv_content)
+
+                    phones = re.findall(r"[\+]?[\d\s\-\(\)]{10,}", cv_content)
                     value = phones[0].strip() if phones else ""
 
                 if value:
-                    instructions.append(FillInstruction(
-                        selector=selector,
-                        value=value,
-                        field_name=data_key,
-                        confidence=0.8,
-                    ))
+                    instructions.append(
+                        FillInstruction(
+                            selector=selector,
+                            value=value,
+                            field_name=data_key,
+                            confidence=0.8,
+                        )
+                    )
                 break
 
         # Handle cover letter textarea
         if cover_letter and "cover" in combined:
-            instructions.append(FillInstruction(
-                selector=selector,
-                value=cover_letter,
-                field_name="cover_letter",
-                confidence=0.9,
-            ))
+            instructions.append(
+                FillInstruction(
+                    selector=selector,
+                    value=cover_letter,
+                    field_name="cover_letter",
+                    confidence=0.9,
+                )
+            )
 
     return instructions
 

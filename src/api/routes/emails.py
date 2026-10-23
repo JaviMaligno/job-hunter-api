@@ -46,17 +46,13 @@ async def get_webhook_user(
     if x_webhook_api_key and settings.webhook_api_key:
         if x_webhook_api_key == settings.webhook_api_key:
             # Get or create webhook user
-            result = await db.execute(
-                select(User).where(User.email == "webhook@jobhunter.system")
-            )
+            result = await db.execute(select(User).where(User.email == "webhook@jobhunter.system"))
             user = result.scalar_one_or_none()
             if user:
                 return user
 
             # Find the most recently created user (likely the active user)
-            result = await db.execute(
-                select(User).order_by(User.created_at.desc()).limit(1)
-            )
+            result = await db.execute(select(User).order_by(User.created_at.desc()).limit(1))
             user = result.scalar_one_or_none()
             if user:
                 return user

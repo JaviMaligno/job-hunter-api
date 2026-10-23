@@ -24,9 +24,7 @@ class SkillEnhancerOutput(BaseModel):
 
     enhanced_cv: str = Field(description="The CV with the skill added")
     changes_made: list[str] = Field(description="List of changes made to the CV")
-    change_explanation: str = Field(
-        description="Explanation of where and how the skill was added"
-    )
+    change_explanation: str = Field(description="Explanation of where and how the skill was added")
 
 
 SKILL_ENHANCER_SYSTEM_PROMPT = """You are an expert CV enhancement specialist. Your task is to naturally integrate new skills into existing CVs based on the user's explanation of their experience.
@@ -83,9 +81,7 @@ class SkillEnhancerAgent(BaseAgent[SkillEnhancerOutput]):
     def system_prompt(self) -> str:
         return SKILL_ENHANCER_SYSTEM_PROMPT
 
-    async def _execute(
-        self, input_data: SkillEnhancerInput, **kwargs
-    ) -> SkillEnhancerOutput:
+    async def _execute(self, input_data: SkillEnhancerInput, **kwargs) -> SkillEnhancerOutput:
         """
         Add a skill to a CV based on user explanation.
 

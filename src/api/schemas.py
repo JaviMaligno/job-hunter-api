@@ -202,13 +202,19 @@ class ApplicationResponse(BaseModel):
 class CVAdaptRequest(BaseModel):
     """Request schema for CV adaptation."""
 
-    job_id: UUID | None = Field(default=None, description="Job ID to save materials to. If provided, materials will be persisted.")
+    job_id: UUID | None = Field(
+        default=None,
+        description="Job ID to save materials to. If provided, materials will be persisted.",
+    )
     job_url: str | None = None
     job_description: str | None = None
     job_title: str
     company: str
     cv_content: str | None = None  # Uses user's base CV if not provided
-    language: str | None = Field(default=None, description="Language override: 'en' or 'es'. If None, auto-detect from job description.")
+    language: str | None = Field(
+        default=None,
+        description="Language override: 'en' or 'es'. If None, auto-detect from job description.",
+    )
 
 
 class CVAdaptResponse(BaseModel):
